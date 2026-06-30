@@ -1,0 +1,11 @@
+# Benchmarks
+benchmarks/
+
+# Results
+results/
+
+# Build
+build/
+
+# IDE
+.vscode/
