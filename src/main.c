@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "exporter.h"
+#include "parser.h"
 #include "repository.h"
 #include "scanner.h"
 
@@ -17,15 +18,9 @@ int main(int argc, char **argv) {
 
     scanner_scan(&repo);
 
-    // parser_parse(&repo);
+    parser_parse(&repo);
 
     exporter_export(&repo);
-
-    // printf("path: TODO\n");
-    // printf("scan_date: TODO\n");
-    // printf("c_files: %ld\n", repo.file_count);
-    // printf("header_files: %ld\n", repo.header_count);
-    // printf("total_files: TODO\n");
 
     repository_destroy(&repo);
 

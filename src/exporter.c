@@ -43,7 +43,10 @@ void exporter_export(repository_t *repo) {
         fprintf(f, "\"path\": \"%s\",\n", file->path);
 
         json_indent(f, 3);
-        fprintf(f, "\"type\": \"%s\"\n", file->type == FILE_C ? "c" : "header");
+        fprintf(f, "\"type\": \"%s\",\n", file->type == FILE_C ? "c" : "header");
+
+        json_indent(f, 3);
+        fprintf(f, "\"line_count\": %zu\n", file->line_count);
 
         json_indent(f, 2);
         fprintf(f, "}");
