@@ -3,14 +3,12 @@
 
 #include <stdlib.h>
 
-typedef enum {
-    FILE_C,
-    FILE_HEADER
-} file_type_t;
+typedef enum { FILE_C, FILE_HEADER } file_type_t;
 
 typedef struct file {
     char *path;
     file_type_t type;
+    size_t function_count;
     size_t line_count;
     struct file *next;
 } file_t;
@@ -23,7 +21,11 @@ typedef struct {
 
 } repository_t;
 
-void repository_init(repository_t *repo, char *path);
+void repository_add_file(repository_t *repo, const char *path, file_type_t type);
+
+void repository_init(repository_t *repo, const char *path);
+
+void repository_destroy_file(file_t *file);
 
 void repository_destroy(repository_t *repo);
 

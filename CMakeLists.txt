@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
 project(repo_analyzer C)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,3 +20,50 @@ file(GLOB SRC CONFIGURE_DEPENDS
 )
 
 add_executable(repo_analyzer ${SRC})
+
+# -----------------------------------------------------------------------------
+# Formatting
+# -----------------------------------------------------------------------------
+
+find_program(CLANG_FORMAT clang-format)
+
+if(CLANG_FORMAT)
+    file(GLOB_RECURSE ALL_SOURCE_FILES
+        src/*.c
+        src/*.h
+    )
+
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT} -i ${ALL_SOURCE_FILES}
+    )
+endif()
+
+# -----------------------------------------------------------------------------
+# Static analysis
+# -----------------------------------------------------------------------------
+
+find_program(CPPCHECK cppcheck)
+
+if(CPPCHECK)
+    add_custom_target(check
+        COMMAND ${CPPCHECK}
+                --enable=all
+                --inconclusive
+                --suppress=missingIncludeSystem
+                ${PROJECT_SOURCE_DIR}/src
+    )
+endif()
+
+# -----------------------------------------------------------------------------
+# IWYU
+# -----------------------------------------------------------------------------
+
+find_program(IWYU_TOOL iwyu_tool)
+
+if(IWYU_TOOL)
+    add_custom_target(inc
+        COMMAND ${IWYU_TOOL} -p ${CMAKE_BINARY_DIR}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        DEPENDS ${PROJECT_NAME}
+    )
+endif()
