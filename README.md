@@ -24,7 +24,7 @@ make
 
 If the `results` directory does not exist, JSON outputs are written to the `build` directory instead.
 
-# Usage
+## Usage
 
 ```bash
 repo_analyzer [OPTION] <repository>
