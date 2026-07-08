@@ -50,4 +50,7 @@ static void scan_directory(repository_t *repo, const char *path) {
     exit_if(closedir(dir) == -1, "closedir");
 }
 
-void scanner_scan(repository_t *repo) { scan_directory(repo, repo->path); }
+void scanner_scan(repository_t *repo) {
+    if (repo->mode == MODE_LOCAL || repo->mode == MODE_DOWNLOAD)
+        scan_directory(repo, repo->absolute_path);
+}

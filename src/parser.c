@@ -5,7 +5,7 @@
 #include "utils.h"
 
 static void parse_file(file_t *file) {
-    FILE *f = fopen(file->path, "r");
+    FILE *f = fopen(file->absolute_path, "r");
     exit_if(f == NULL, "fopen");
 
     char *line = NULL;
