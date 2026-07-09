@@ -21,14 +21,18 @@ typedef struct {
     char *name;
     char *absolute_path;
     char *url;
+    size_t file_count;
     size_t c_file_count;
     size_t header_file_count;
     file_t *files;
+    file_t **ordered_files;
 } repository_t;
 
 void repository_init(repository_t *repo);
 
 void repository_add_file(repository_t *repo, const char *path, file_type_t type);
+
+void repository_order_files(repository_t *repo);
 
 void repository_destroy_file(file_t *file);
 

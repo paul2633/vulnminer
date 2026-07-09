@@ -8,7 +8,7 @@
 
 void exit_if(int condition, const char *msg);
 
-void remove_path(char *path);
+void remove_directory(char *path);
 
 void download_repository(const repository_t *repo);
 

@@ -28,17 +28,11 @@ static void scan_directory(repository_t *repo, const char *path) {
 
         if (S_ISREG(st.st_mode)) {
             const char *ext = strrchr(entry->d_name, '.');
-
             if (ext != NULL) {
-                if (strcmp(ext, ".c") == 0) {
-                    repo->c_file_count++;
+                if (strcmp(ext, ".c") == 0)
                     repository_add_file(repo, sub_path, FILE_C);
-                }
-
-                else if (strcmp(ext, ".h") == 0) {
-                    repo->header_file_count++;
+                else if (strcmp(ext, ".h") == 0)
                     repository_add_file(repo, sub_path, FILE_HEADER);
-                }
             }
         }
 

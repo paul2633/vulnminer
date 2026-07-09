@@ -15,14 +15,22 @@ int main(int argc, char **argv) {
 
     arguments_parse(argc, argv, &repo);
 
+    if (repo.mode == MODE_DOWNLOAD) {
+        download_repository(&repo);
+        repo.absolute_path = realpath(repo.name, NULL);
+        exit_if(repo.absolute_path == NULL, "realpath");
+    }
+
     scanner_scan(&repo);
 
     parser_parse(&repo);
 
+    repository_order_files(&repo);
+
     exporter_export(&repo);
 
     if (repo.mode == MODE_DOWNLOAD)
-        remove_path(repo.name);
+        remove_directory(repo.name);
 
     repository_destroy(&repo);
 

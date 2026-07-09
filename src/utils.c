@@ -33,7 +33,7 @@ static void execute(char *const argv[]) {
     }
 }
 
-void remove_path(char *path) {
+void remove_directory(char *path) {
     char *cmd[] = {"rm", "-rf", path, NULL};
     execute(cmd);
 }
@@ -42,7 +42,7 @@ void download_repository(const repository_t *repo) {
     struct stat st;
 
     if (stat(repo->name, &st) != -1)
-        remove_path(repo->name);
+        remove_directory(repo->name);
 
     char *cmd[] = {"git", "clone", repo->url, repo->name, NULL};
     execute(cmd);
