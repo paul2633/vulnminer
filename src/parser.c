@@ -1,26 +1,30 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <stddef.h>
 
 #include "parser.h"
+#include "reader.h"
 #include "utils.h"
 
-static void parse_file(file_t *file) {
-    FILE *f = fopen(file->absolute_path, "r");
-    exit_if(f == NULL, "fopen");
+extern const TSLanguage *tree_sitter_c(void);
 
-    char *line = NULL;
-    size_t len = 0;
+void parser_init(parser_t *parser) {
+    parser->ts_parser = ts_parser_new();
+    exit_if(parser->ts_parser == NULL, "ts_parser_new");
 
-    while (getline(&line, &len, f) != -1) {
-        file->line_count++;
-    }
-
-    free(line);
-
-    exit_if(fclose(f) == EOF, "fclose");
+    exit_if(!ts_parser_set_language(parser->ts_parser, tree_sitter_c()), "ts_parser_set_language");
 }
 
-void parser_parse(repository_t *repo) {
-    for (file_t *file = repo->files; file != NULL; file = file->next)
-        parse_file(file);
+void parser_destroy(parser_t *parser) { ts_parser_delete(parser->ts_parser); }
+
+void parser_parse(parser_t *parser, file_t *file, const buffer_t *buffer) {
+    (void)parser;
+
+    file->line_count = 0;
+
+    for (size_t i = 0; i < buffer->size; i++) {
+        if (buffer->data[i] == '\n')
+            file->line_count++;
+    }
+
+    if (buffer->size > 0 && buffer->data[buffer->size - 1] != '\n')
+        file->line_count++;
 }

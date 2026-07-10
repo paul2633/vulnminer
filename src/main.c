@@ -5,7 +5,6 @@
 #include "parser.h"
 #include "repository.h"
 #include "scanner.h"
-#include "utils.h"
 
 int main(int argc, char **argv) {
 
@@ -15,22 +14,17 @@ int main(int argc, char **argv) {
 
     arguments_parse(argc, argv, &repo);
 
-    if (repo.mode == MODE_DOWNLOAD) {
-        download_repository(&repo);
-        repo.absolute_path = realpath(repo.name, NULL);
-        exit_if(repo.absolute_path == NULL, "realpath");
-    }
+    parser_t parser;
 
-    scanner_scan(&repo);
+    parser_init(&parser);
 
-    parser_parse(&repo);
+    scanner_scan(&repo, &parser);
+
+    parser_destroy(&parser);
 
     repository_order_files(&repo);
 
     exporter_export(&repo);
-
-    if (repo.mode == MODE_DOWNLOAD)
-        remove_directory(repo.name);
 
     repository_destroy(&repo);
 

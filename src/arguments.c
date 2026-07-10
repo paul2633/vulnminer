@@ -36,6 +36,10 @@ void arguments_parse(int argc, char *argv[], repository_t *repo) {
             char *slash = strrchr(repo->url, '/');
             exit_if(slash == NULL, "strrchr");
             repo->name = slash + 1;
+
+            download_repository(repo);
+            repo->absolute_path = realpath(repo->name, NULL);
+            exit_if(repo->absolute_path == NULL, "realpath");
             break;
         }
 

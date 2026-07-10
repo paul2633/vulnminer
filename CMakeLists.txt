@@ -19,7 +19,30 @@ file(GLOB SRC CONFIGURE_DEPENDS
     src/*.c
 )
 
+add_library(tree_sitter STATIC
+    external/tree-sitter/src/lib.c
+    external/tree-sitter-c/src/parser.c
+)
+
+target_include_directories(tree_sitter SYSTEM PUBLIC
+    external/tree-sitter/include
+    external/tree-sitter/src
+    external/tree-sitter-c/src
+)
+
+target_compile_options(tree_sitter PRIVATE
+    -w
+)
+
 add_executable(repo_analyzer ${SRC})
+
+target_include_directories(repo_analyzer PRIVATE
+    src
+)
+
+target_link_libraries(repo_analyzer PRIVATE
+    tree_sitter
+)
 
 # -----------------------------------------------------------------------------
 # Formatting

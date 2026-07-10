@@ -30,7 +30,7 @@ typedef struct {
 
 void repository_init(repository_t *repo);
 
-void repository_add_file(repository_t *repo, const char *path, file_type_t type);
+file_t *repository_add_file(repository_t *repo, const char *path, file_type_t type);
 
 void repository_order_files(repository_t *repo);
 
