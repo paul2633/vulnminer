@@ -1,9 +1,9 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
-#include "parser.h"
+#include "config.h"
 #include "repository.h"
 
-void scanner_scan(repository_t *repo, parser_t *parser);
+void scanner_scan(repository_t *repo, config_t *config);
 
 #endif

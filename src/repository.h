@@ -1,40 +1,30 @@
 #ifndef REPOSITORY_H
 #define REPOSITORY_H
 
+#include "config.h"
+
 #include <stdlib.h>
 
-typedef enum { FILE_C, FILE_HEADER } file_type_t;
-
 typedef struct file {
-    char *name;
     char *absolute_path;
     char *relative_path;
-    file_type_t type;
+    char *name;
     size_t line_count;
     struct file *next;
 } file_t;
 
-typedef enum { MODE_NONE, MODE_LOCAL, MODE_DOWNLOAD, MODE_REMOTE } repo_mode_t;
-
 typedef struct {
-    repo_mode_t mode;
     char *name;
-    char *absolute_path;
-    char *url;
     size_t file_count;
-    size_t c_file_count;
-    size_t header_file_count;
     file_t *files;
     file_t **ordered_files;
 } repository_t;
 
-void repository_init(repository_t *repo);
+void repository_init(repository_t *repo, config_t *config);
 
-file_t *repository_add_file(repository_t *repo, const char *path, file_type_t type);
+void repository_add_file(repository_t *repo, char *path, int offset);
 
 void repository_order_files(repository_t *repo);
-
-void repository_destroy_file(file_t *file);
 
 void repository_destroy(repository_t *repo);
 

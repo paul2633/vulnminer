@@ -1,31 +1,28 @@
 #include <string.h>
 
+#include "config.h"
 #include "repository.h"
 #include "utils.h"
 
-void repository_init(repository_t *repo) { memset(repo, 0, sizeof(*repo)); }
+void repository_init(repository_t *repo, config_t *config) {
+    memset(repo, 0, sizeof(*repo));
 
-file_t *repository_add_file(repository_t *repo, const char *path, file_type_t type) {
+    char *name = strrchr(config->source, '/');
+    repo->name = name == NULL ? config->source : name + 1;
+}
+
+void repository_add_file(repository_t *repo, char *path, int offset) {
     file_t *file = malloc(sizeof(file_t));
-    exit_if(file == NULL, "malloc");
+    exit_if(file == NULL, __func__, "malloc");
     memset(file, 0, sizeof(*file));
 
-    file->absolute_path = strdup(path);
-    exit_if(file->absolute_path == NULL, "strdup");
-    file->relative_path = file->absolute_path + strlen(repo->absolute_path) + 1;
+    file->absolute_path = path;
+    file->relative_path = path + offset + 1;
+    file->name = strrchr(path, '/') + 1;
 
-    file->type = type;
-
-    // critical section
     file->next = repo->files;
     repo->files = file;
-    if (file->type == FILE_C)
-        repo->c_file_count++;
-    else if (file->type == FILE_HEADER)
-        repo->header_file_count++;
-    // critical section end
-
-    return file;
+    repo->file_count++;
 }
 
 static int compare_files(const void *a, const void *b) {
@@ -36,10 +33,8 @@ static int compare_files(const void *a, const void *b) {
 }
 
 void repository_order_files(repository_t *repo) {
-    repo->file_count = repo->c_file_count + repo->header_file_count;
-
     repo->ordered_files = malloc(repo->file_count * sizeof(*repo->ordered_files));
-    exit_if(repo->ordered_files == NULL, "malloc");
+    exit_if(repo->ordered_files == NULL, __func__, "malloc");
 
     size_t i = 0;
     for (file_t *f = repo->files; f != NULL; f = f->next)
@@ -48,22 +43,12 @@ void repository_order_files(repository_t *repo) {
     qsort(repo->ordered_files, repo->file_count, sizeof(*repo->ordered_files), compare_files);
 }
 
-void repository_destroy_file(file_t *file) {
-    free(file->absolute_path);
-    free(file);
-}
-
 void repository_destroy(repository_t *repo) {
-    if (repo->mode == MODE_DOWNLOAD)
-        remove_directory(repo->name);
-    if (repo->mode == MODE_LOCAL || repo->mode == MODE_DOWNLOAD)
-        free(repo->absolute_path);
-    if (repo->mode == MODE_REMOTE || repo->mode == MODE_DOWNLOAD)
-        free(repo->url);
     free(repo->ordered_files);
     while (repo->files != NULL) {
         file_t *tmp = repo->files;
         repo->files = repo->files->next;
-        repository_destroy_file(tmp);
+        free(tmp->absolute_path);
+        free(tmp);
     }
 }
