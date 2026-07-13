@@ -1,4 +1,5 @@
 #include <dirent.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,13 +10,30 @@
 #include "scanner.h"
 #include "utils.h"
 
-static void scan_local_directory(repository_t *repo, const char *path, int offset) {
+static bool is_excluded(const config_t *config, const char *name) {
+    if (config->exclude == NULL)
+        return false;
+
+    for (size_t i = 0; config->exclude[i] != NULL; i++)
+        if (strcmp(name, config->exclude[i]) == 0)
+            return true;
+
+    return false;
+}
+
+static void scan_local_directory(repository_t *repo, const config_t *config, const char *path, int offset_relative_path) {
     DIR *dir = opendir(path);
     exit_if(dir == NULL, __func__, "opendir");
+
     const struct dirent *entry;
+    int offset_name = strlen(path) + 1;
 
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (is_excluded(config, entry->d_name)) {
             continue;
         }
 
@@ -27,7 +45,7 @@ static void scan_local_directory(repository_t *repo, const char *path, int offse
 
         if (!S_ISREG(st.st_mode)) {
             if (S_ISDIR(st.st_mode))
-                scan_local_directory(repo, sub_path, offset);
+                scan_local_directory(repo, config, sub_path, offset_relative_path);
             free(sub_path);
             continue;
         }
@@ -38,23 +56,26 @@ static void scan_local_directory(repository_t *repo, const char *path, int offse
             continue;
         }
 
-        repository_add_file(repo, sub_path, offset);
+        repository_add_file(repo, sub_path, offset_relative_path, offset_name);
     }
     exit_if(closedir(dir) == -1, __func__, "closedir");
 }
 
 static void scan_remote_repository(repository_t *repo) { (void)repo; }
 
-void scanner_scan(repository_t *repo, config_t *config) {
-    if (config->mode == MODE_REMOTE) {
-        scan_remote_repository(repo);
-        return;
+void scanner_scan(repository_t *repo, const config_t *config) {
+    if (config->mode == MODE_LOCAL) {
+        scan_local_directory(repo, config, config->source, strlen(config->source) + 1);
     }
 
-    const char *source = config->mode == MODE_LOCAL ? config->source : repo->name;
-    char *path = realpath(source, NULL);
-    exit_if(path == NULL, __func__, "realpath");
+    else if (config->mode == MODE_DOWNLOAD) {
+        char *path = realpath(repo->name, NULL);
+        exit_if(path == NULL, __func__, "realpath");
+        scan_local_directory(repo, config, path, strlen(path) + 1);
+        free(path);
+    }
 
-    scan_local_directory(repo, path, strlen(path));
-    free(path);
+    else if (config->mode == MODE_REMOTE) {
+        scan_remote_repository(repo);
+    }
 }

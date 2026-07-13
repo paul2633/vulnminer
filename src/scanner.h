@@ -4,6 +4,6 @@
 #include "config.h"
 #include "repository.h"
 
-void scanner_scan(repository_t *repo, config_t *config);
+void scanner_scan(repository_t *repo, const config_t *config);
 
 #endif

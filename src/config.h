@@ -11,6 +11,7 @@ typedef struct {
     char *commit;
     unsigned threads;
     granularity_t granularity;
+    char **exclude;
 } config_t;
 
 void config_init(config_t *config, int argc, char **argv);

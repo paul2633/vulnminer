@@ -14,6 +14,6 @@ void parser_init(parser_t *parser);
 
 void parser_destroy(parser_t *parser);
 
-void parser_parse(parser_t *parser, file_t *file, const buffer_t *buffer);
+void parser_parse(config_t *config, parser_t *parser, file_t *file, const buffer_t *source, buffer_t *json);
 
 #endif

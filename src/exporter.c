@@ -1,110 +1,57 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "config.h"
 #include "exporter.h"
+#include "reader.h"
 #include "repository.h"
 #include "utils.h"
 
-static void json_indent(FILE *f, unsigned indent) {
-    for (unsigned i = 0; i < indent; i++)
-        fputs("    ", f);
-}
-
 FILE *exporter_begin(repository_t *repo, config_t *config) {
     char *output_path = NULL;
-    const char *mode = config->mode == MODE_LOCAL ? "local" : config->mode == MODE_DOWNLOAD ? "download" : "remote";
+    const char *mode = config->mode == MODE_LOCAL ? "local" : config->mode == MODE_DOWNLOAD ? "download" : config->mode == MODE_REMOTE ? "remote" : NULL;
 
     exit_if(asprintf(&output_path, "../results/%s_%s.json", repo->name, mode) == -1, __func__, "asprintf");
     FILE *f = fopen(output_path, "w");
     exit_if(f == NULL, __func__, "fopen");
     free(output_path);
 
-    fprintf(f, "{\n");
+    json_write(f, 0, "{\n");
+    json_write(f, 1, "\"repository\": \"%s\",\n", repo->name);
+    json_write(f, 1, "\"mode\": \"%s\",\n", mode);
+    json_write(f, 1, "\"source\": \"%s\",\n", config->source);
+    if (config->mode == MODE_DOWNLOAD || config->mode == MODE_REMOTE)
+        json_write(f, 1, "\"commit\": \"%s\",\n", config->commit == NULL ? "HEAD" : config->commit);
 
-    json_indent(f, 1);
-    fprintf(f, "\"repository\": \"%s\",\n", repo->name);
+    json_write(f, 1, "\"excluded directories\": [", config->source);
+    if (config->exclude != NULL) {
+        for (size_t i = 0; config->exclude[i] != NULL; i++) {
+            json_write(f, 0, "\"%s\"", config->exclude[i]);
+            if (config->exclude[i + 1] != NULL)
+                json_write(f, 0, ", ", config->exclude[i]);
+        }
+    }
+    json_write(f, 0, "],\n");
 
-    json_indent(f, 1);
-    fprintf(f, "\"mode\": \"%s\",\n", mode);
-
-    json_indent(f, 1);
-    fprintf(f, "\"source\": \"%s\",\n", config->source);
-
-    json_indent(f, 1);
-    fprintf(f, "\"file_count\": %zu,\n", repo->file_count);
-
-    json_indent(f, 1);
-    fprintf(f, "\"files\": [\n");
+    //json_write(f, 1, "\"file_count\": %zu,\n", repo->file_count);
+    json_write(f, 1, "\"files\": [\n");
 
     return f;
 }
 
+void exporter_export(FILE *f, const buffer_t *buffer, bool last) {
+    exit_if(fwrite(buffer->data, 1, buffer->size, f) != buffer->size, __func__, "fwrite");
+    if (!last)
+        exit_if(fputs(",\n", f) == EOF, __func__, "fputs");
+    else
+        exit_if(fputs("\n", f) == EOF, __func__, "fputs");
+}
+
 void exporter_end(FILE *f) {
-    json_indent(f, 1);
-    fprintf(f, "]\n");
-
-    fprintf(f, "}\n");
+    json_write(f, 1, "]\n");
+    json_write(f, 0, "}\n");
 
     exit_if(fclose(f) == EOF, __func__, "fclose");
 }
-
-/*
-void exporter_export(repository_t *repo, config_t *config) {
-    char *output_path = NULL;
-    const char *mode = config->mode == MODE_LOCAL ? "local" : config->mode == MODE_DOWNLOAD ? "download" : "remote";
-
-    exit_if(asprintf(&output_path, "../results/%s_%s.json", repo->name, mode) == -1, __func__, "asprintf");
-    FILE *f = fopen(output_path, "w");
-    exit_if(f == NULL, __func__, "fopen");
-    free(output_path);
-
-    fprintf(f, "{\n");
-
-    json_indent(f, 1);
-    fprintf(f, "\"repository\": \"%s\",\n", repo->name);
-
-    json_indent(f, 1);
-    fprintf(f, "\"mode\": \"%s\",\n", mode);
-
-    json_indent(f, 1);
-    fprintf(f, "\"source\": \"%s\",\n", config->source);
-
-    json_indent(f, 1);
-    fprintf(f, "\"file_count\": \"%zu\",\n", repo->file_count);
-
-    json_indent(f, 1);
-    fprintf(f, "\"files\": [\n");
-
-    for (size_t i = 0; i < repo->file_count; i++) {
-        const file_t *file = repo->ordered_files[i];
-
-        json_indent(f, 2);
-        fprintf(f, "{\n");
-
-        json_indent(f, 3);
-        fprintf(f, "\"name\": \"%s\",\n", file->name);
-
-        json_indent(f, 3);
-        fprintf(f, "\"path\": \"%s\",\n", file->relative_path);
-
-        json_indent(f, 3);
-        fprintf(f, "\"line_count\": %zu\n", file->line_count);
-
-        json_indent(f, 2);
-        fprintf(f, "}");
-
-        if (i + 1 < repo->file_count)
-            fprintf(f, ",");
-
-        fprintf(f, "\n");
-    }
-
-    json_indent(f, 1);
-    fprintf(f, "]\n");
-
-    fprintf(f, "}\n");
-
-    exit_if(fclose(f) == EOF, __func__, "fclose");
-}
-*/

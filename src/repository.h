@@ -9,7 +9,6 @@ typedef struct file {
     char *absolute_path;
     char *relative_path;
     char *name;
-    size_t line_count;
     struct file *next;
 } file_t;
 
@@ -22,7 +21,7 @@ typedef struct {
 
 void repository_init(repository_t *repo, config_t *config);
 
-void repository_add_file(repository_t *repo, char *path, int offset);
+void repository_add_file(repository_t *repo, char *path, int offset_relative_path, int offset_name);
 
 void repository_order_files(repository_t *repo);
 

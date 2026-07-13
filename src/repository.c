@@ -11,14 +11,14 @@ void repository_init(repository_t *repo, config_t *config) {
     repo->name = name == NULL ? config->source : name + 1;
 }
 
-void repository_add_file(repository_t *repo, char *path, int offset) {
+void repository_add_file(repository_t *repo, char *path, int offset_relative_path, int offset_name) {
     file_t *file = malloc(sizeof(file_t));
     exit_if(file == NULL, __func__, "malloc");
     memset(file, 0, sizeof(*file));
 
     file->absolute_path = path;
-    file->relative_path = path + offset + 1;
-    file->name = strrchr(path, '/') + 1;
+    file->relative_path = path + offset_relative_path;
+    file->name = path + offset_name;
 
     file->next = repo->files;
     repo->files = file;

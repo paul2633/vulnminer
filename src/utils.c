@@ -17,32 +17,44 @@ static void execute(char *const argv[]) {
     int status;
     pid_t pid = fork();
 
-    switch (pid) {
-    case -1:
-        exit_if(1, __func__, "fork");
-        break;
+    exit_if(pid == -1, __func__, "fork");
 
-    case 0:
+    if (pid == 0) {
         exit_if(execvp(argv[0], argv) == -1, __func__, "execvp");
-        break;
+    }
 
-    default:
+    else {
         exit_if(waitpid(pid, &status, 0) == -1, __func__, "waitpid");
         exit_if(!WIFEXITED(status) || WEXITSTATUS(status) != EXIT_SUCCESS, __func__, argv[0]);
     }
 }
 
 void remove_directory(char *path) {
-    char *cmd[] = {"rm", "-rf", path, NULL};
-    execute(cmd);
+    char *rm[] = {"rm", "-rf", path, NULL};
+    execute(rm);
 }
 
-void download_repository(char *source, char *target) {
+void download_repository(char *source, char *commit, char *target) {
     struct stat st;
 
     if (stat(target, &st) != -1)
         remove_directory(target);
 
-    char *cmd[] = {"git", "clone", source, target, NULL};
-    execute(cmd);
+    char *clone[] = {"git", "clone", source, target, NULL};
+    execute(clone);
+
+    if (commit != NULL) {
+        char *checkout[] = {"git", "-C", target, "checkout", commit, NULL};
+        execute(checkout);
+    }
+}
+
+void json_write(FILE *f, unsigned indent, const char *fmt, ...) {
+    for (unsigned i = 0; i < indent; i++)
+        exit_if(fputs("    ", f) == EOF, __func__, "fputs");
+
+    va_list ap;
+    va_start(ap, fmt);
+    exit_if(vfprintf(f, fmt, ap) < 0, __func__, "vfprintf");
+    va_end(ap);
 }
