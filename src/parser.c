@@ -88,15 +88,25 @@ static void parse_lines(const buffer_t *source, FILE *f, size_t start_line, size
     }
 }
 
-static void parse_functions(const buffer_t *source, config_t *config, TSNode node, FILE *f, bool *first) {
+static void parse_functions(const buffer_t *source, config_t *config, TSNode node, FILE *f, bool *first, uint32_t *start, uint32_t *end) {
 
+    if (strcmp(ts_node_type(node), "identifier") == 0 && start != NULL && *start == 0) {
+        *start = ts_node_start_byte(node);
+        *end = ts_node_end_byte(node);
+    }
+    
     if (strcmp(ts_node_type(node), "function_definition") == 0) {
 
-        TSPoint start = ts_node_start_point(node);
-        TSPoint end   = ts_node_end_point(node);
+        uint32_t start2 = 0;
+        uint32_t end2   = 0;
 
-        size_t start_line = start.row + 1;
-        size_t end_line   = end.row + 1;
+        uint32_t child_count = ts_node_child_count(node);
+
+        for (uint32_t i = 0; i < child_count; i++)
+            parse_functions(source, config, ts_node_child(node, i), f, first, &start2, &end2);
+
+        size_t start_line = ts_node_start_point(node).row + 1;
+        size_t end_line   = ts_node_end_point(node).row + 1;
 
         if (*first) {
             json_write(f, 0, "\n");
@@ -107,7 +117,8 @@ static void parse_functions(const buffer_t *source, config_t *config, TSNode nod
         }
 
         json_write(f, 4, "{\n");
-        json_write(f, 5, "\"line_count\": %zu,\n", end_line - start_line + 1);
+        json_write(f, 5, "\"name\": \"%.*s\",\n", (int)(end2 - start2), source->data + start2);
+        //json_write(f, 5, "\"line_count\": %zu,\n", end_line - start_line + 1);
         json_write(f, 5, "\"start_line\": %zu,\n", start_line);
 
         if (config->granularity == GRANULARITY_LINE) {
@@ -125,10 +136,12 @@ static void parse_functions(const buffer_t *source, config_t *config, TSNode nod
         json_write(f, 4, "}");
     }
 
-    uint32_t child_count = ts_node_child_count(node);
+    else {
+        uint32_t child_count = ts_node_child_count(node);
 
-    for (uint32_t i = 0; i < child_count; i++)
-        parse_functions(source, config, ts_node_child(node, i), f, first);
+        for (uint32_t i = 0; i < child_count; i++)
+            parse_functions(source, config, ts_node_child(node, i), f, first, start, end);
+    }
 }
 
 void parser_parse(config_t *config, parser_t *parser, file_t *file, const buffer_t *source, buffer_t *json) {
@@ -145,12 +158,12 @@ void parser_parse(config_t *config, parser_t *parser, file_t *file, const buffer
     json_write(f, 2, "{\n");
     json_write(f, 3, "\"name\": \"%s\",\n", file->name);
     json_write(f, 3, "\"path\": \"%s\",\n", file->relative_path);
-
+    
     if (config->granularity == GRANULARITY_FUNCTION || config->granularity == GRANULARITY_LINE) {
         json_write(f, 3, "\"line_count\": %zu,\n", end.row + 1);
         json_write(f, 3, "\"functions\": [");
         bool first = true;
-        parse_functions(source, config, root, f, &first);
+        parse_functions(source, config, root, f, &first, NULL, NULL);
         if (first)
             json_write(f, 0, "]\n");
         else {

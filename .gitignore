@@ -9,3 +9,5 @@ build/
 
 # IDE
 .vscode/
+
+plots/__pycache__/*

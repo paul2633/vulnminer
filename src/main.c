@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
+#include <sys/resource.h>
 
 #include "config.h"
 #include "exporter.h"
@@ -10,7 +11,7 @@
 #include "scanner.h"
 #include "utils.h"
 
-static void pipeline_sequential(repository_t *repo, config_t *config, FILE *f) {
+static void variant_seq(repository_t *repo, config_t *config, FILE *f) {
 
     parser_t parser;
     parser_init(&parser);
@@ -32,7 +33,7 @@ static void pipeline_sequential(repository_t *repo, config_t *config, FILE *f) {
     parser_destroy(&parser);
 }
 
-static void pipeline_parallel_for(repository_t *repo, config_t *config, FILE *f) {
+static void variant_omp_for(repository_t *repo, config_t *config, FILE *f) {
 
     parser_t parsers[config->threads];
     for (unsigned i = 0; i < config->threads; i++) {
@@ -64,7 +65,7 @@ static void pipeline_parallel_for(repository_t *repo, config_t *config, FILE *f)
     }
 }
 
-static void pipeline_tasks(repository_t *repo, config_t *config, FILE *f) {
+static void variant_omp_task(repository_t *repo, config_t *config, FILE *f) {
 
     parser_t parsers[config->threads];
     for (unsigned i = 0; i < config->threads; i++) {
@@ -102,6 +103,8 @@ static void pipeline_tasks(repository_t *repo, config_t *config, FILE *f) {
 
 int main(int argc, char **argv) {
 
+    double start = omp_get_wtime();
+
     config_t config;
     repository_t repo;
 
@@ -117,7 +120,14 @@ int main(int argc, char **argv) {
 
     FILE *f = exporter_begin(&repo, &config);
 
-    pipeline_tasks(&repo, &config, f);
+    if (config.variant == VARIANT_SEQ)
+        variant_seq(&repo, &config, f);
+
+    else if (config.variant == VARIANT_OMP_FOR)
+        variant_omp_for(&repo, &config, f);
+
+    else if (config.variant == VARIANT_OMP_TASK)
+        variant_omp_task(&repo, &config, f);
 
     exporter_end(f);
 
@@ -125,6 +135,16 @@ int main(int argc, char **argv) {
         remove_directory(repo.name);
 
     repository_destroy(&repo);
+
+    if (config.perfs_path != NULL) {
+        double elapsed = omp_get_wtime() - start;
+        struct rusage usage;
+        getrusage(RUSAGE_SELF, &usage);
+        double memory = usage.ru_maxrss / 1000000.0;
+        output_perf_numbers(&config, elapsed, memory);
+    }
+
+
     config_destroy(&config);
 
     return EXIT_SUCCESS;

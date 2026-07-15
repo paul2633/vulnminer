@@ -11,16 +11,16 @@
 
 FILE *exporter_begin(repository_t *repo, config_t *config) {
     char *output_path = NULL;
-    const char *mode = config->mode == MODE_LOCAL ? "local" : config->mode == MODE_DOWNLOAD ? "download" : config->mode == MODE_REMOTE ? "remote" : NULL;
-
-    exit_if(asprintf(&output_path, "../results/%s_%s.json", repo->name, mode) == -1, __func__, "asprintf");
-    FILE *f = fopen(output_path, "w");
+    
+    exit_if(asprintf(&output_path, "%s/%s_%s_%s.json", config->json_path, repo->name, mode_to_string(config->mode), granularity_to_string(config->granularity)) == -1, __func__, "asprintf");
+    free(config->json_path);
+    config->json_path = output_path;
+    FILE *f = fopen(config->json_path, "w");
     exit_if(f == NULL, __func__, "fopen");
-    free(output_path);
-
+    
     json_write(f, 0, "{\n");
     json_write(f, 1, "\"repository\": \"%s\",\n", repo->name);
-    json_write(f, 1, "\"mode\": \"%s\",\n", mode);
+    json_write(f, 1, "\"mode\": \"%s\",\n", mode_to_string(config->mode));
     json_write(f, 1, "\"source\": \"%s\",\n", config->source);
     if (config->mode == MODE_DOWNLOAD || config->mode == MODE_REMOTE)
         json_write(f, 1, "\"commit\": \"%s\",\n", config->commit == NULL ? "HEAD" : config->commit);

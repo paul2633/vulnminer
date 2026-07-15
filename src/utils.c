@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "utils.h"
+#include "config.h"
 
 void exit_if(int condition, const char *fn_name, const char *msg) {
     if (condition) {
@@ -57,4 +58,26 @@ void json_write(FILE *f, unsigned indent, const char *fmt, ...) {
     va_start(ap, fmt);
     exit_if(vfprintf(f, fmt, ap) < 0, __func__, "vfprintf");
     va_end(ap);
+}
+
+void output_perf_numbers(const config_t *config, double time_s, double memory_gb) {
+    FILE *f = fopen(config->perfs_path, "a");
+    exit_if(f == NULL, __func__, "fopen");
+
+    if (ftell(f) == 0) {
+        fprintf(f,
+                "mode;source;granularity;threads;variant;time;memory\n");
+    }
+
+    fprintf(f,
+            "%s;%s;%s;%u;%s;%.5f;%.5f\n",
+            mode_to_string(config->mode),
+            config->source,
+            granularity_to_string(config->granularity),
+            config->threads,
+            variant_to_string(config->variant),
+            time_s,
+            memory_gb);
+
+    exit_if(fclose(f) == EOF, __func__, "fclose");
 }
