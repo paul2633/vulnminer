@@ -1,6 +1,6 @@
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <omp.h>
 #include <sys/resource.h>
 
 #include "config.h"
@@ -16,7 +16,10 @@ static void variant_seq(repository_t *repo, config_t *config, FILE *f) {
     parser_t parser;
     parser_init(&parser);
 
-    for (unsigned i = 0; i < repo->file_count; i++) {
+    double start = omp_get_wtime();
+    int last_percent = -1;
+
+    for (size_t i = 0; i < repo->file_count; i++) {
 
         buffer_t source = {0};
         buffer_t json = {0};
@@ -25,9 +28,19 @@ static void variant_seq(repository_t *repo, config_t *config, FILE *f) {
         parser_parse(config, &parser, repo->ordered_files[i], &source, &json);
 
         exporter_export(f, &json, i == repo->file_count - 1);
-        
+
         free(source.data);
         free(json.data);
+
+        size_t done = i + 1;
+        int cur_percent = 100 * done / repo->file_count;
+        if (cur_percent != last_percent) {
+            last_percent = cur_percent;
+            double elapsed = omp_get_wtime() - start;
+            size_t remaining = repo->file_count - done;
+            printf("\rExported files: %zu/%zu (%d%%), estimated time left : %ds", done, repo->file_count, cur_percent, (int)(elapsed * remaining / done));
+            fflush(stdout);
+        }
     }
 
     parser_destroy(&parser);
@@ -41,7 +54,7 @@ static void variant_omp_for(repository_t *repo, config_t *config, FILE *f) {
     }
 
     buffer_t sources[repo->file_count], jsons[repo->file_count];
-    #pragma omp parallel for schedule(dynamic, 1)
+#pragma omp parallel for schedule(dynamic, 1)
     for (unsigned i = 0; i < repo->file_count; i++) {
         int tid = omp_get_thread_num();
         sources[i].data = NULL;
@@ -51,12 +64,12 @@ static void variant_omp_for(repository_t *repo, config_t *config, FILE *f) {
 
         reader_local(repo->ordered_files[i], sources + i);
         parser_parse(config, parsers + tid, repo->ordered_files[i], sources + i, jsons + i);
-        
+
         free(sources[i].data);
     }
 
     for (unsigned i = 0; i < repo->file_count; i++) {
-        exporter_export(f, jsons+ i, i == repo->file_count - 1);
+        exporter_export(f, jsons + i, i == repo->file_count - 1);
         free(jsons[i].data);
     }
 
@@ -74,11 +87,14 @@ static void variant_omp_task(repository_t *repo, config_t *config, FILE *f) {
 
     buffer_t sources[repo->file_count], jsons[repo->file_count + 1];
 
-    #pragma omp parallel
-    #pragma omp single
+    double start = omp_get_wtime();
+    int last_percent = -1;
+
+#pragma omp parallel
+#pragma omp single
     {
         for (unsigned i = 0; i < repo->file_count; i++) {
-            #pragma omp task firstprivate(i) depend(out: sources[i])
+#pragma omp task firstprivate(i) depend(out : sources[i])
             {
                 sources[i] = (buffer_t){0};
                 jsons[i] = (buffer_t){0};
@@ -87,11 +103,22 @@ static void variant_omp_task(repository_t *repo, config_t *config, FILE *f) {
                 free(sources[i].data);
             }
 
-            
-            #pragma omp task depend(in: sources[i], jsons[i]) depend(out: jsons[i + 1])
+#pragma omp task depend(in : sources[i], jsons[i]) depend(out : jsons[i + 1])
             {
                 exporter_export(f, jsons + i, i == repo->file_count - 1);
                 free(jsons[i].data);
+
+                size_t done = i + 1;
+                int cur_percent = 100 * done / repo->file_count;
+                if (cur_percent != last_percent) {
+                    last_percent = cur_percent;
+                    double elapsed = omp_get_wtime() - start;
+                    size_t remaining = repo->file_count - done;
+
+                    double left = elapsed / done * remaining;
+                    printf("\rExported files: %zu/%zu (%d%%), estimated time left : %f", done, repo->file_count, cur_percent, left);
+                    fflush(stdout);
+                }
             }
         }
     }
@@ -143,7 +170,6 @@ int main(int argc, char **argv) {
         double memory = usage.ru_maxrss / 1000000.0;
         output_perf_numbers(&config, elapsed, memory);
     }
-
 
     config_destroy(&config);
 

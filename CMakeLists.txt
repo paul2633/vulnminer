@@ -15,6 +15,7 @@ add_compile_options(
     -Wmissing-prototypes
     -Wstrict-prototypes
     -g
+    -Wswitch-enum
 )
 
 file(GLOB SRC CONFIGURE_DEPENDS

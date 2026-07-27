@@ -1,11 +1,12 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "utils.h"
 #include "config.h"
+#include "utils.h"
 
 void exit_if(int condition, const char *fn_name, const char *msg) {
     if (condition) {
@@ -65,19 +66,23 @@ void output_perf_numbers(const config_t *config, double time_s, double memory_gb
     exit_if(f == NULL, __func__, "fopen");
 
     if (ftell(f) == 0) {
-        fprintf(f,
-                "mode;source;granularity;threads;variant;time;memory\n");
+        fprintf(f, "mode;source;granularity;threads;variant;time;memory\n");
     }
 
-    fprintf(f,
-            "%s;%s;%s;%u;%s;%.5f;%.5f\n",
-            mode_to_string(config->mode),
-            config->source,
-            granularity_to_string(config->granularity),
-            config->threads,
-            variant_to_string(config->variant),
-            time_s,
-            memory_gb);
+    fprintf(f, "%s;%s;%s;%u;%s;%.5f;%.5f\n", enum_to_string(mode_map, config->mode), config->source, enum_to_string(granularity_map, config->granularity),
+            config->threads, enum_to_string(variant_map, config->variant), time_s, memory_gb);
 
     exit_if(fclose(f) == EOF, __func__, "fclose");
+}
+
+void print_str_list(char **list) {
+    printf("[");
+    if (list != NULL) {
+        for (size_t i = 0; list[i] != NULL; i++) {
+            printf("\"%s\"", list[i]);
+            if (list[i + 1] != NULL)
+                printf(", ");
+        }
+    }
+    printf("]");
 }

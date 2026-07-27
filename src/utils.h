@@ -1,9 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "config.h"
 
@@ -20,5 +18,7 @@ void download_repository(char *source, char *commit, char *target);
 void json_write(FILE *f, unsigned indent, const char *fmt, ...);
 
 void output_perf_numbers(const config_t *config, double time_s, double memory_gb);
+
+void print_str_list(char **list);
 
 #endif

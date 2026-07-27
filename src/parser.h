@@ -3,6 +3,7 @@
 
 #include <tree_sitter/api.h>
 
+#include "config.h"
 #include "reader.h"
 #include "repository.h"
 
