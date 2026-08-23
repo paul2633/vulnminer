@@ -1,4 +1,0 @@
-https://github.com/Genymobile/scrcpy (12,7 Mo)
-https://github.com/pbatard/rufus (65,4 Mo)
-https://github.com/curl/curl (150,5 Mo)
-https://github.com/git/git (377,2 Mo)

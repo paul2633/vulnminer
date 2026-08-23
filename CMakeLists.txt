@@ -8,6 +8,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(OpenMP REQUIRED)
 
+find_package(CURL REQUIRED)
+
 add_compile_options(
     -Wall
     -Wextra
@@ -18,20 +20,22 @@ add_compile_options(
     -Wswitch-enum
 )
 
-file(GLOB SRC CONFIGURE_DEPENDS
+file(GLOB_RECURSE SRC CONFIGURE_DEPENDS
     src/*.c
 )
 
 add_library(tree_sitter STATIC
-    external/tree-sitter/src/lib.c
-    external/tree-sitter-c/src/parser.c
+    third_party/tree-sitter/src/lib.c
+    third_party/tree-sitter-c/src/parser.c
 )
 
 target_include_directories(tree_sitter SYSTEM PUBLIC
-    external/tree-sitter/include
-    external/tree-sitter/src
-    external/tree-sitter-c/src
+    third_party/tree-sitter/include
+    third_party/tree-sitter/src
+    third_party/tree-sitter-c/src
 )
+
+add_subdirectory(third_party/yyjson)
 
 target_compile_options(tree_sitter PRIVATE
     -w
@@ -39,13 +43,17 @@ target_compile_options(tree_sitter PRIVATE
 
 add_executable(repo_analyzer ${SRC})
 
+target_compile_definitions(repo_analyzer PRIVATE _GNU_SOURCE)
+
 target_include_directories(repo_analyzer PRIVATE
     src
 )
 
 target_link_libraries(repo_analyzer PRIVATE
     tree_sitter
+    yyjson
     OpenMP::OpenMP_C
+    CURL::libcurl
 )
 
 # -----------------------------------------------------------------------------

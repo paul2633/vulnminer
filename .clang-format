@@ -1,3 +1,10 @@
 BasedOnStyle: LLVM
 ColumnLimit: 160
 IndentWidth: 4
+
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+IndentCaseLabels: true
+SortIncludes: true
+
+BinPackArguments: false

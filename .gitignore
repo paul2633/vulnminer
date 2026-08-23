@@ -1,6 +1,3 @@
-# Benchmarks
-benchmarks/
-
 # Results
 results/
 
@@ -10,4 +7,4 @@ build/
 # IDE
 .vscode/
 
-plots/__pycache__/*
+local/
