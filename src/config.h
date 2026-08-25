@@ -1,21 +1,32 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stdbool.h>
+#include <time.h>
+
 typedef struct {
+    char *cwe_ids_raw;
+    unsigned *cwe_ids;
+    unsigned cwe_ids_count;
+
     char *cve_published_before_str;
     time_t cve_published_before;
     char *cve_published_after_str;
     time_t cve_published_after;
-    unsigned max_commits_per_cwe;
+
     char *nvd_api_key;
-    char *cwe_ids_raw;
-    unsigned *cwe_ids;
-    unsigned cwe_ids_count;
-    unsigned threads_count;
+    char *github_api_key;
+
+    bool include_c_files;
+    bool include_cpp_files;
+
+    char *export_folder_path;
 } config_t;
 
-void config_init(config_t *config, int argc, char **argv);
+config_t *config_new(int argc, char **argv);
 
 void config_destroy(config_t *config);
+
+void display_config(const config_t *config);
 
 #endif

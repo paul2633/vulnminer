@@ -1,10 +1,8 @@
-# Results
-results/
-
 # Build
 build/
 
 # IDE
 .vscode/
 
-local/
+# Local temporary stuff
+tmp/
