@@ -20,11 +20,11 @@ void http_init(void);
 
 void http_cleanup(void);
 
-void http_client_init(http_client_t *client);
-
-void http_client_add_header(http_client_t *client, const char *header);
+http_client_t *http_client_new(void);
 
 void http_client_destroy(http_client_t *client);
+
+void http_client_add_header(http_client_t *client, const char *header);
 
 yyjson_doc *http_get_json(http_client_t *client, const char *url);
 

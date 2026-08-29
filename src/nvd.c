@@ -4,7 +4,7 @@
 #include <yyjson.h>
 
 #include "config.h"
-#include "display.h"
+#include "history.h"
 #include "http.h"
 #include "nvd.h"
 #include "nvd_parser.h"
@@ -16,15 +16,17 @@
 
 #define DAYS(n) ((time_t)(n) * 24 * 60 * 60)
 
-static void nvd_init_client(http_client_t *client, config_t *config) {
-    http_client_init(client);
+static http_client_t *nvd_client_new(const char *api_key) {
+    http_client_t *nvd_client = http_client_new();
 
-    if (config->nvd_api_key != NULL) {
-        char *key = NULL;
-        EXIT_IF(asprintf(&key, "apiKey: %s", config->nvd_api_key) == -1, "asprintf");
-        http_client_add_header(client, key);
-        free(key);
+    if (api_key != NULL) {
+        char *line = NULL;
+        EXIT_IF(asprintf(&line, "apiKey: %s", api_key) == -1, "asprintf");
+        http_client_add_header(nvd_client, line);
+        free(line);
     }
+
+    return nvd_client;
 }
 
 static void date_to_url(char *dst, size_t size, time_t date) {
@@ -53,12 +55,13 @@ static char *parameters_to_url(int results_per_page, int start_index, time_t win
     return url;
 }
 
-static int nvd_probe_window(http_client_t *client, time_t window_start, time_t window_end, unsigned cwe_id) {
-
+static int probe_window(http_client_t *client, time_t window_start, time_t window_end, unsigned cwe_id) {
     char *url = parameters_to_url(0, 0, window_start, window_end, cwe_id);
 
     yyjson_doc *doc = http_get_json(client, url);
     free(url);
+
+    EXIT_IF(doc == NULL, "HTTP error 404");
 
     int result = nvd_parser_get_total_results(doc);
     yyjson_doc_free(doc);
@@ -66,42 +69,62 @@ static int nvd_probe_window(http_client_t *client, time_t window_start, time_t w
     return result;
 }
 
-static void nvd_download_window(http_client_t *client, display_t *display, time_t window_start, time_t window_end, unsigned cwe_id) {
+static char *download_line(unsigned cwe_id, const char *start, const char *end, int page, int total_pages) {
+    char *line = NULL;
 
-    display_download_start(display, cwe_id, window_start, window_end, 0, 0);
-    int total_results = nvd_probe_window(client, window_start, window_end, cwe_id);
-    display_download_complete(display);
+    if (total_pages == 0)
+        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   probing...", cwe_id, start, end) == -1, "asprintf");
+    else
+        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   fetching page %d/%d...", cwe_id, start, end, page, total_pages) == -1, "asprintf");
+
+    return line;
+}
+
+static void download_window(http_client_t *client, history_t *history, http_client_t *github_client, time_t window_start, time_t window_end, unsigned cwe_id) {
+    char start_display[11], end_display[11];
+    date_to_display(start_display, sizeof(start_display), window_start);
+    date_to_display(end_display, sizeof(end_display), window_end);
+
+    history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, 0, 0));
+    int total_results = probe_window(client, window_start, window_end, cwe_id);
+    history_append(history, history->nvd_section, "complete");
 
     int total_pages = (total_results + RESULTS_PER_PAGE - 1) / RESULTS_PER_PAGE;
+
     for (int i = total_pages - 1; i >= 0; i--) {
 
         char *url = parameters_to_url(RESULTS_PER_PAGE, i * RESULTS_PER_PAGE, window_start, window_end, cwe_id);
 
-        display_download_start(display, cwe_id, window_start, window_end, total_pages - i, total_pages);
+        history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, total_pages - i, total_pages));
         yyjson_doc *doc = http_get_json(client, url);
-        display_download_complete(display);
-
         free(url);
+
+        EXIT_IF(doc == NULL, "HTTP error 404");
+
+        history_append(history, history->nvd_section, "complete");
+
 #pragma omp task
         {
-            nvd_parser_extract_commits(doc);
+            nvd_parser_extract_commits(doc, github_client, history);
             yyjson_doc_free(doc);
+#pragma omp taskwait
         }
     }
 }
 
-void nvd_request(config_t *config, display_t *display) {
-    http_client_t client = {0};
-    nvd_init_client(&client, config);
+void nvd_request(const config_t *config, history_t *history, http_client_t *github_client) {
+    http_client_t *nvd_client = nvd_client_new(config->nvd_api_key);
 
     for (unsigned i = 0; i < config->cwe_ids_count; i++) {
+
         time_t window_end = config->cve_published_before;
         time_t window_start = window_end - DAYS(DAYS_PER_WINDOW) + 1;
         if (window_start < config->cve_published_after)
             window_start = config->cve_published_after;
 
         while (window_end > window_start) {
-            nvd_download_window(&client, display, window_start, window_end, config->cwe_ids[i]);
+
+            download_window(nvd_client, history, github_client, window_start, window_end, config->cwe_ids[i]);
 
             window_end -= DAYS(DAYS_PER_WINDOW);
             window_start -= DAYS(DAYS_PER_WINDOW);
@@ -110,5 +133,5 @@ void nvd_request(config_t *config, display_t *display) {
         }
     }
 
-    http_client_destroy(&client);
+    http_client_destroy(nvd_client);
 }

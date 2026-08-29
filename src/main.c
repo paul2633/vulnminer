@@ -3,41 +3,44 @@
 #include <stdlib.h>
 
 #include "config.h"
-#include "display.h"
 #include "github.h"
+#include "history.h"
 #include "http.h"
 #include "nvd.h"
 
 int main(int argc, char **argv) {
 
-    config_t config = {0};
-    config_init(&config, argc, argv);
+    config_t *config = config_new(argc, argv);
 
-    display_config(&config);
+    history_t *history = history_new();
 
-    display_t display = {0};
-    display_init(&display);
+    display_config(config);
 
-    http_client_t github_client = {0};
-    github_init_client(&github_client, &config);
+    printf("\n");
+
+    display_history(history);
 
     http_init();
+
+    http_client_t *github_client = github_client_new(config->github_api_key);
 
     omp_set_num_threads(omp_get_num_procs());
 
 #pragma omp parallel
     {
 #pragma omp master
-        { nvd_request(&config, &display); }
+        { nvd_request(config, history, github_client); }
     }
 
 #pragma omp taskwait
 
-    http_client_destroy(&github_client);
+    http_client_destroy(github_client);
+
     http_cleanup();
 
-    display_destroy(&display);
-    config_destroy(&config);
+    history_destroy(history);
+
+    config_destroy(config);
 
     return EXIT_SUCCESS;
 }

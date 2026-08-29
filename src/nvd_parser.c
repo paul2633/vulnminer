@@ -2,7 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <yyjson.h>
+#include <stdlib.h>
 
+#include "github.h"
+#include "history.h"
+#include "http.h"
 #include "nvd_parser.h"
 #include "utils.h"
 
@@ -31,7 +35,38 @@ static bool nvd_parser_check_is_patch(yyjson_val *tags) {
     return false;
 }
 
-static void nvd_parser_parse_cve(yyjson_val *cve) {
+static char *extract_repo_path(const char *url) {
+    const char *prefix = "https://github.com/";
+    const char *suffix = "/commit/";
+
+    if (strncmp(url, prefix, strlen(prefix)) != 0)
+        return NULL;
+
+    const char *p = url + strlen(prefix);
+    const char *commit = strstr(p, suffix);
+
+    if (commit == NULL)
+        return NULL;
+
+    return strndup(p, commit - p);
+}
+
+static char *extract_commit_hash(const char *url) {
+    const char *prefix = "https://github.com/";
+    const char *suffix = "/commit/";
+
+    if (strncmp(url, prefix, strlen(prefix)) != 0)
+        return NULL;
+
+    const char *commit = strstr(url + strlen(prefix), suffix);
+
+    if (commit == NULL)
+        return NULL;
+
+    return strdup(commit + strlen(suffix));
+}
+
+static void nvd_parser_parse_cve(http_client_t *github_client, history_t *history, yyjson_val *cve) {
     yyjson_val *refs = yyjson_obj_get(cve, "references");
     if (refs == NULL || !yyjson_is_arr(refs))
         return;
@@ -48,21 +83,33 @@ static void nvd_parser_parse_cve(yyjson_val *cve) {
             continue;
 
         const char *url_str = yyjson_get_str(url);
-        if (strstr(url_str, "github.com") == NULL || strstr(url_str, "/commit/") == NULL)
+
+        char *repo_name = extract_repo_path(url_str);
+        char *commit_hash = extract_commit_hash(url_str);
+
+        if (repo_name == NULL || commit_hash == NULL) {
+            free(repo_name);
+            free(commit_hash);
             continue;
+        }
 
-        yyjson_val *published = yyjson_obj_get(cve, "published");
-        if (published == NULL || !yyjson_is_str(published))
-            continue;
+        const char *id = yyjson_get_str(yyjson_obj_get(cve, "id"));
+        EXIT_IF(id == NULL, "id");
 
-        yyjson_val *id = yyjson_obj_get(cve, "id");
-        EXIT_IF(id == NULL || !yyjson_is_str(id), "id");
+        char *id_cpy = strdup(id);
+        EXIT_IF(id_cpy == NULL, "strdup");
 
-        // printf("%s %s %s\n", yyjson_get_str(id), yyjson_get_str(published), url_str);
+#pragma omp task
+        {
+            github_parse_commit(github_client, history, id_cpy, repo_name, commit_hash);
+            free(repo_name);
+            free(commit_hash);
+            free(id_cpy);
+        }
     }
 }
 
-void nvd_parser_extract_commits(yyjson_doc *doc) {
+void nvd_parser_extract_commits(yyjson_doc *doc, http_client_t *github_client, history_t *history) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
 
@@ -77,6 +124,6 @@ void nvd_parser_extract_commits(yyjson_doc *doc) {
         yyjson_val *cve = yyjson_obj_get(vuln, "cve");
         EXIT_IF(cve == NULL || !yyjson_is_obj(cve), "cve");
 
-        nvd_parser_parse_cve(cve);
+        nvd_parser_parse_cve(github_client, history, cve);
     }
 }
