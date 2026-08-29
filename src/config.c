@@ -1,9 +1,9 @@
 #include <getopt.h>
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "utils.h"
@@ -11,13 +11,7 @@
 #define MATCH(key) (strncmp(line, key "=", sizeof(key)) == 0)
 #define VALUE(key) (line + sizeof(key))
 
-static const struct option options[] = {{"options-file", required_argument, NULL, 'o'},
-                                        {"cwe-ids", required_argument, NULL, 'i'},
-                                        {"cve-published-before", required_argument, NULL, 'b'},
-                                        {"cve-published-after", required_argument, NULL, 'a'},
-                                        {"nvd-api-key", required_argument, NULL, 'n'},
-                                        {"github-api-key", required_argument, NULL, 'g'},
-                                        {NULL, 0, NULL, 0}};
+static const struct option options[] = {{"options-file", required_argument, NULL, 'o'}, {NULL, 0, NULL, 0}};
 
 static void set_string(char **dst, const char *new) {
     free(*dst);
@@ -53,29 +47,15 @@ static void parse_config_file(config_t *config, const char *path) {
             set_string(&config->nvd_api_key, VALUE("nvd-api-key"));
         else if (MATCH("github-api-key"))
             set_string(&config->github_api_key, VALUE("github-api-key"));
+        else if (MATCH("include-c-files"))
+            config->include_c_files = strcmp(VALUE("include-c-files"), "yes") == 0;
+        else if (MATCH("include-cpp-files"))
+            config->include_cpp_files = strcmp(VALUE("include-cpp-files"), "yes") == 0;
+        else if (MATCH("include-python-files"))
+            config->include_python_files = strcmp(VALUE("include-python-files"), "yes") == 0;
     }
 
     EXIT_IF(fclose(f) == EOF, "fclose");
-}
-
-static void parse_options(config_t *config, int argc, char **argv) {
-    int opt;
-
-    while ((opt = getopt_long(argc, argv, "o:i:b:a:n:g:", options, NULL)) != -1) {
-
-        if (opt == 'o')
-            parse_config_file(config, optarg);
-        else if (opt == 'i')
-            set_string(&config->cwe_ids_raw, optarg);
-        else if (opt == 'b')
-            set_string(&config->cve_published_before_str, optarg);
-        else if (opt == 'a')
-            set_string(&config->cve_published_after_str, optarg);
-        else if (opt == 'n')
-            set_string(&config->nvd_api_key, optarg);
-        else if (opt == 'g')
-            set_string(&config->github_api_key, optarg);
-    }
 }
 
 static void parse_dates(config_t *config) {
@@ -135,7 +115,11 @@ config_t *config_new(int argc, char **argv) {
     config_t *config = calloc(1, sizeof(*config));
     EXIT_IF(config == NULL, "calloc");
 
-    parse_options(config, argc, argv);
+    int opt;
+    while ((opt = getopt_long(argc, argv, "o:", options, NULL)) != -1)
+        if (opt == 'o')
+            parse_config_file(config, optarg);
+
     parse_cwe_ids(config);
     parse_dates(config);
 
@@ -149,7 +133,6 @@ void config_destroy(config_t *config) {
     free(config->cve_published_after_str);
     free(config->nvd_api_key);
     free(config->github_api_key);
-
     free(config);
 }
 
@@ -163,6 +146,11 @@ void display_config(const config_t *config) {
     printf(RESET_C "\n");
     printf(LOG_C "[INIT] cve-published-before: %s" RESET_C "\n", config->cve_published_before_str);
     printf(LOG_C "[INIT] cve-published-after: %s" RESET_C "\n", config->cve_published_after_str);
-    printf(LOG_C "[INIT] nvd_api_key: %s" RESET_C "\n", config->nvd_api_key);
-    printf(LOG_C "[INIT] github_api_key: %s" RESET_C "\n", config->github_api_key);
+    printf("\n");
+    printf(LOG_C "[INIT] nvd-api-key: %s" RESET_C "\n", config->nvd_api_key);
+    printf(LOG_C "[INIT] github-api-key: %s" RESET_C "\n", config->github_api_key);
+    printf("\n");
+    printf(LOG_C "[INIT] include-c-files: %s" RESET_C "\n", config->include_c_files ? "yes" : "no");
+    printf(LOG_C "[INIT] include-cpp-files: %s" RESET_C "\n", config->include_cpp_files ? "yes" : "no");
+    printf(LOG_C "[INIT] include-python-files: %s" RESET_C "\n", config->include_python_files ? "yes" : "no");
 }

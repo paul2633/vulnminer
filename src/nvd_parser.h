@@ -3,11 +3,10 @@
 
 #include <yyjson.h>
 
-#include "history.h"
-#include "http.h"
+#include "jobs.h"
 
 int nvd_parser_get_total_results(yyjson_doc *doc);
 
-void nvd_parser_extract_commits(yyjson_doc *doc, http_client_t *github_client, history_t *history);
+void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue);
 
 #endif

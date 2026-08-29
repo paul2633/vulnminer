@@ -6,6 +6,7 @@
 #include "config.h"
 #include "history.h"
 #include "http.h"
+#include "jobs.h"
 #include "nvd.h"
 #include "nvd_parser.h"
 #include "utils.h"
@@ -80,14 +81,14 @@ static char *download_line(unsigned cwe_id, const char *start, const char *end, 
     return line;
 }
 
-static void download_window(http_client_t *client, history_t *history, http_client_t *github_client, time_t window_start, time_t window_end, unsigned cwe_id) {
+static void download_window(http_client_t *client, jobs_queue_t *queue, history_t *history, time_t window_start, time_t window_end, unsigned cwe_id) {
     char start_display[11], end_display[11];
     date_to_display(start_display, sizeof(start_display), window_start);
     date_to_display(end_display, sizeof(end_display), window_end);
 
     history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, 0, 0));
     int total_results = probe_window(client, window_start, window_end, cwe_id);
-    history_append(history, history->nvd_section, "complete");
+    // history_append(history, history->nvd_section, "complete");
 
     int total_pages = (total_results + RESULTS_PER_PAGE - 1) / RESULTS_PER_PAGE;
 
@@ -101,18 +102,14 @@ static void download_window(http_client_t *client, history_t *history, http_clie
 
         EXIT_IF(doc == NULL, "HTTP error 404");
 
-        history_append(history, history->nvd_section, "complete");
+        // history_append(history, history->nvd_section, "complete");
 
-#pragma omp task
-        {
-            nvd_parser_extract_commits(doc, github_client, history);
-            yyjson_doc_free(doc);
-#pragma omp taskwait
-        }
+        nvd_parser_extract_commits(doc, queue);
+        yyjson_doc_free(doc);
     }
 }
 
-void nvd_request(const config_t *config, history_t *history, http_client_t *github_client) {
+void nvd_request(const config_t *config, jobs_queue_t *queue, history_t *history) {
     http_client_t *nvd_client = nvd_client_new(config->nvd_api_key);
 
     for (unsigned i = 0; i < config->cwe_ids_count; i++) {
@@ -124,7 +121,7 @@ void nvd_request(const config_t *config, history_t *history, http_client_t *gith
 
         while (window_end > window_start) {
 
-            download_window(nvd_client, history, github_client, window_start, window_end, config->cwe_ids[i]);
+            download_window(nvd_client, queue, history, window_start, window_end, config->cwe_ids[i]);
 
             window_end -= DAYS(DAYS_PER_WINDOW);
             window_start -= DAYS(DAYS_PER_WINDOW);

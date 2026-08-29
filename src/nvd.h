@@ -3,8 +3,8 @@
 
 #include "config.h"
 #include "history.h"
-#include "http.h"
+#include "jobs.h"
 
-void nvd_request(const config_t *config, history_t *history, http_client_t *github_client);
+void nvd_request(const config_t *config, jobs_queue_t *queue, history_t *history);
 
 #endif

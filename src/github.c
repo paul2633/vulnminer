@@ -113,18 +113,17 @@ void github_parse_commit(http_client_t *client, history_t *history, const char *
 
     yyjson_doc *doc = NULL;
 
-#pragma omp critical(github)
-    {
-        history_push(history, history->github_section, line);
+    history_push(history, history->github_section, line);
 
-        doc = http_get_json(client, url);
+    doc = http_get_json(client, url);
 
-        if (doc == NULL)
-            history_append(history, history->github_section, "page not found");
-        else {
-            history_append(history, history->github_section, "complete");
-        }
+    /*
+    if (doc == NULL)
+        history_append(history, history->github_section, "page not found");
+    else {
+        history_append(history, history->github_section, "complete");
     }
+    */
     free(url);
 
     if (doc == NULL)

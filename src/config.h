@@ -17,9 +17,9 @@ typedef struct {
     char *nvd_api_key;
     char *github_api_key;
 
-    bool add_c_files;
-    bool add_cpp_files;
-    bool add_python_files;
+    bool include_c_files;
+    bool include_cpp_files;
+    bool include_python_files;
 } config_t;
 
 config_t *config_new(int argc, char **argv);

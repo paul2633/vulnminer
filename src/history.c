@@ -5,7 +5,7 @@
 #include "utils.h"
 
 #define HISTORY_SECTIONS 3
-#define HISTORY_LEN 6
+#define HISTORY_LEN 3
 
 history_t *history_new(void) {
     history_t *history = calloc(1, sizeof(*history));
@@ -22,10 +22,14 @@ history_t *history_new(void) {
     history->parsing_section = calloc(HISTORY_LEN, sizeof(*history->parsing_section));
     EXIT_IF(history->parsing_section == NULL, "calloc");
 
+    EXIT_IF(pthread_mutex_init(&history->lock, NULL) != 0, "pthread_mutex_init");
+
     return history;
 }
 
 void history_destroy(history_t *history) {
+    pthread_mutex_destroy(&history->lock);
+
     for (int i = 0; i < HISTORY_LEN; i++) {
         free(history->nvd_section[i]);
         free(history->github_section[i]);
@@ -71,29 +75,27 @@ void display_history(history_t *history) {
 }
 
 void history_push(history_t *history, char **section, char *line) {
-#pragma omp critical(display)
-    {
-        free(section[HISTORY_LEN - 1]);
+    pthread_mutex_lock(&history->lock);
+    free(section[HISTORY_LEN - 1]);
 
-        for (int i = HISTORY_LEN - 1; i > 0; i--)
-            section[i] = section[i - 1];
+    for (int i = HISTORY_LEN - 1; i > 0; i--)
+        section[i] = section[i - 1];
 
-        section[0] = line;
+    section[0] = line;
 
-        display_history(history);
-    }
+    display_history(history);
+    pthread_mutex_unlock(&history->lock);
 }
 
 void history_append(history_t *history, char **section, const char *suffix) {
-#pragma omp critical(display)
-    {
-        char *line = NULL;
+    pthread_mutex_lock(&history->lock);
+    char *line = NULL;
 
-        EXIT_IF(asprintf(&line, "%s   %s", section[0], suffix) == -1, "asprintf");
+    EXIT_IF(asprintf(&line, "%s   %s", section[0], suffix) == -1, "asprintf");
 
-        free(section[0]);
-        section[0] = line;
+    free(section[0]);
+    section[0] = line;
 
-        display_history(history);
-    }
+    display_history(history);
+    pthread_mutex_unlock(&history->lock);
 }

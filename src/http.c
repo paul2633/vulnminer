@@ -1,4 +1,5 @@
 #include <curl/curl.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,7 @@ http_client_t *http_client_new(void) {
     EXIT_IF(client->curl == NULL, "curl_easy_init");
 
     http_client_configure_curl(client);
+    EXIT_IF(pthread_mutex_init(&client->lock, NULL) != 0, "pthread_mutex_init");
 
     return client;
 }
@@ -50,6 +52,7 @@ http_client_t *http_client_new(void) {
 void http_client_destroy(http_client_t *client) {
     curl_easy_cleanup(client->curl);
     curl_slist_free_all(client->headers);
+    pthread_mutex_destroy(&client->lock);
 
     client->curl = NULL;
     client->headers = NULL;
@@ -91,6 +94,8 @@ static CURLcode http_get(http_client_t *client, const char *url, http_response_t
 }
 
 yyjson_doc *http_get_json(http_client_t *client, const char *url) {
+    pthread_mutex_lock(&client->lock);
+
     while (true) {
         sleep(client->delay);
 
@@ -115,14 +120,16 @@ yyjson_doc *http_get_json(http_client_t *client, const char *url) {
             continue;
         }
 
+        EXIT_IF(status != 404 && (status < 200 || status >= 300), "HTTP error %ld", status);
+
+        client->delay /= 2;
+        pthread_mutex_unlock(&client->lock);
+
         if (status == 404) {
             free(response.data);
             return NULL;
         }
 
-        EXIT_IF(status < 200 || status >= 300, "HTTP error %ld", status);
-
-        client->delay /= 2;
         yyjson_doc *doc = yyjson_read(response.data, response.size, 0);
         free(response.data);
         EXIT_IF(doc == NULL, "yyjson_read");

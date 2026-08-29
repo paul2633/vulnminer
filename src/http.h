@@ -2,6 +2,7 @@
 #define HTTP_H
 
 #include <curl/curl.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <yyjson.h>
 
@@ -12,6 +13,7 @@ typedef struct {
 
 typedef struct {
     CURL *curl;
+    pthread_mutex_t lock;
     struct curl_slist *headers;
     int delay;
 } http_client_t;
