@@ -19,6 +19,6 @@ typedef struct {
 
 http_client_t *github_client_new(const char *api_key);
 
-void github_parse_commit(http_client_t *client, history_t *history, const char *cve_id, const char *repo_name, const char *commit_hash);
+void github_parse_commit(http_client_t *client, history_t *history, unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash);
 
 #endif

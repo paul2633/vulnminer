@@ -6,6 +6,7 @@
 #include "utils.h"
 
 #define HISTORY_SECTIONS 3
+#define SECTION_LEN 3
 
 static history_section_t *section_new(const char *title) {
     history_section_t *section = calloc(1, sizeof(*section));
@@ -14,6 +15,9 @@ static history_section_t *section_new(const char *title) {
     section->title = strdup(title);
     EXIT_IF(section->title == NULL, "strdup");
 
+    section->lines = calloc(SECTION_LEN, sizeof(*section->lines));
+    EXIT_IF(section->lines == NULL, "calloc");
+
     return section;
 }
 
@@ -21,6 +25,7 @@ static void section_destroy(history_section_t *section) {
     free(section->title);
     for (int i = 0; i < SECTION_LEN; i++)
         free(section->lines[i]);
+    free(section->lines);
     free(section);
 }
 
@@ -49,7 +54,7 @@ void history_destroy(history_t *history) {
     free(history);
 }
 
-static void display_section(history_t *history, history_section_t *section) {
+static void display_section(history_t *history, const history_section_t *section) {
     printf("\033[2K" LOG_C "%s" RESET_C "\n", section->title);
 
     for (int i = SECTION_LEN - 1; i >= 0; i--) {

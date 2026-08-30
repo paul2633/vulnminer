@@ -93,7 +93,7 @@ void *worker(void *arg) {
         if (job == NULL)
             break;
 
-        github_parse_commit(context->github_client, context->history, job->cve_id, job->repo_name, job->commit_hash);
+        github_parse_commit(context->github_client, context->history, job->cwe_id, job->cve_id, job->repo_name, job->commit_hash);
 
         job_destroy(job);
     }

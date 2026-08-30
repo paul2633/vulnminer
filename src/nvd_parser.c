@@ -64,7 +64,7 @@ static char *extract_commit_hash(const char *url) {
     return strdup(commit + strlen(suffix));
 }
 
-static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve) {
+static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve, unsigned cwe_id) {
     yyjson_val *refs = yyjson_obj_get(cve, "references");
     if (refs == NULL || !yyjson_is_arr(refs))
         return;
@@ -97,11 +97,11 @@ static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve) {
         char *id_cpy = strdup(id);
         EXIT_IF(id_cpy == NULL, "strdup");
 
-        push_new_job(queue, 0, id_cpy, repo_name, commit_hash);
+        push_new_job(queue, cwe_id, id_cpy, repo_name, commit_hash);
     }
 }
 
-void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue) {
+void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue, unsigned cwe_id) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
 
@@ -116,6 +116,6 @@ void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue) {
         yyjson_val *cve = yyjson_obj_get(vuln, "cve");
         EXIT_IF(cve == NULL || !yyjson_is_obj(cve), "cve");
 
-        nvd_parser_parse_cve(queue, cve);
+        nvd_parser_parse_cve(queue, cve, cwe_id);
     }
 }

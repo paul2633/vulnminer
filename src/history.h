@@ -3,11 +3,9 @@
 
 #include <pthread.h>
 
-#define SECTION_LEN 3
-
 typedef struct {
     char *title;
-    char *lines[SECTION_LEN];
+    char **lines;
     unsigned pushed_lines_count;
 } history_section_t;
 

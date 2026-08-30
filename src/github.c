@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <yyjson.h>
 
 #include "github.h"
 #include "history.h"
 #include "http.h"
 #include "utils.h"
-#include "yyjson.h"
 
 http_client_t *github_client_new(const char *api_key) {
     http_client_t *github_client = http_client_new();
@@ -36,7 +36,7 @@ static void parse_commit_info(github_commit_t *commit, yyjson_val *root) {
     yyjson_val *parents = yyjson_obj_get(root, "parents");
     EXIT_IF(parents == NULL || !yyjson_is_arr(parents), "parents");
 
-    if (yyjson_arr_size(parents) == 0)
+    if (yyjson_arr_size(parents) != 1)
         return;
 
     yyjson_val *parent = yyjson_arr_get_first(parents);
@@ -104,12 +104,12 @@ static void github_commit_destroy(github_commit_t *commit) {
     free(commit);
 }
 
-void github_parse_commit(http_client_t *client, history_t *history, const char *cve_id, const char *repo_name, const char *commit_hash) {
+void github_parse_commit(http_client_t *client, history_t *history, unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash) {
     char *url = NULL;
     EXIT_IF(asprintf(&url, "https://api.github.com/repos/%s/commits/%s", repo_name, commit_hash) == -1, "asprintf");
 
     char *line = NULL;
-    asprintf(&line, "%-15s   %-32s   %-40s   probing...", cve_id, repo_name, commit_hash);
+    asprintf(&line, "%-15s   %-32.32s   probing...", cve_id, repo_name);
 
     yyjson_doc *doc = NULL;
 
@@ -130,7 +130,7 @@ void github_parse_commit(http_client_t *client, history_t *history, const char *
     github_commit_t *commit = parse_commit_json(doc);
     yyjson_doc_free(doc);
 
-    if (commit->files_count == 0) {
+    if (commit->files_count == 0 || commit->parent_commit_hash == NULL) {
         github_commit_destroy(commit);
         return;
     }

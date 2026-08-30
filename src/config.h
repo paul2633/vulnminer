@@ -19,7 +19,6 @@ typedef struct {
 
     bool include_c_files;
     bool include_cpp_files;
-    bool include_python_files;
 } config_t;
 
 config_t *config_new(int argc, char **argv);

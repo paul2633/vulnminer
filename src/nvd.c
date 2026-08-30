@@ -109,7 +109,7 @@ static void download_window(http_client_t *client, jobs_queue_t *queue, history_
 
         history_append(history, history->nvd_section, line_number, "complete");
 
-        nvd_parser_extract_commits(doc, queue);
+        nvd_parser_extract_commits(doc, queue, cwe_id);
         yyjson_doc_free(doc);
     }
 }

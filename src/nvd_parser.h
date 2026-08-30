@@ -7,6 +7,6 @@
 
 int nvd_parser_get_total_results(yyjson_doc *doc);
 
-void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue);
+void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue, unsigned cwe_id);
 
 #endif

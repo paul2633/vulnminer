@@ -51,8 +51,6 @@ static void parse_config_file(config_t *config, const char *path) {
             config->include_c_files = strcmp(VALUE("include-c-files"), "yes") == 0;
         else if (MATCH("include-cpp-files"))
             config->include_cpp_files = strcmp(VALUE("include-cpp-files"), "yes") == 0;
-        else if (MATCH("include-python-files"))
-            config->include_python_files = strcmp(VALUE("include-python-files"), "yes") == 0;
     }
 
     EXIT_IF(fclose(f) == EOF, "fclose");
@@ -115,10 +113,15 @@ config_t *config_new(int argc, char **argv) {
     config_t *config = calloc(1, sizeof(*config));
     EXIT_IF(config == NULL, "calloc");
 
+    const char *config_path = "../config.ini";
+
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "o:", options, NULL)) != -1) {
         if (opt == 'o')
-            parse_config_file(config, optarg);
+            config_path = optarg;
+    }
+
+    parse_config_file(config, config_path);
 
     parse_cwe_ids(config);
     parse_dates(config);
@@ -152,5 +155,4 @@ void display_config(const config_t *config) {
     printf("\n");
     printf(LOG_C "[INIT] include-c-files: %s" RESET_C "\n", config->include_c_files ? "yes" : "no");
     printf(LOG_C "[INIT] include-cpp-files: %s" RESET_C "\n", config->include_cpp_files ? "yes" : "no");
-    printf(LOG_C "[INIT] include-python-files: %s" RESET_C "\n", config->include_python_files ? "yes" : "no");
 }
