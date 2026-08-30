@@ -109,21 +109,19 @@ void github_parse_commit(http_client_t *client, history_t *history, const char *
     EXIT_IF(asprintf(&url, "https://api.github.com/repos/%s/commits/%s", repo_name, commit_hash) == -1, "asprintf");
 
     char *line = NULL;
-    EXIT_IF(asprintf(&line, "%s   %s   %s   probing...", cve_id, repo_name, commit_hash) == -1, "asprintf");
+    asprintf(&line, "%-15s   %-32s   %-40s   probing...", cve_id, repo_name, commit_hash);
 
     yyjson_doc *doc = NULL;
 
-    history_push(history, history->github_section, line);
+    unsigned line_number = history_push(history, history->github_section, line);
 
     doc = http_get_json(client, url);
 
-    /*
     if (doc == NULL)
-        history_append(history, history->github_section, "page not found");
-    else {
-        history_append(history, history->github_section, "complete");
-    }
-    */
+        history_append(history, history->github_section, line_number, "   page not found");
+    else
+        history_append(history, history->github_section, line_number, "   complete");
+
     free(url);
 
     if (doc == NULL)

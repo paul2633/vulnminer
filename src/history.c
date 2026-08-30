@@ -1,11 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "history.h"
 #include "utils.h"
 
 #define HISTORY_SECTIONS 3
-#define HISTORY_LEN 3
+
+static history_section_t *section_new(const char *title) {
+    history_section_t *section = calloc(1, sizeof(*section));
+    EXIT_IF(section == NULL, "calloc");
+
+    section->title = strdup(title);
+    EXIT_IF(section->title == NULL, "strdup");
+
+    return section;
+}
+
+static void section_destroy(history_section_t *section) {
+    free(section->title);
+    for (int i = 0; i < SECTION_LEN; i++)
+        free(section->lines[i]);
+    free(section);
+}
 
 history_t *history_new(void) {
     history_t *history = calloc(1, sizeof(*history));
@@ -13,14 +30,9 @@ history_t *history_new(void) {
 
     history->previous_lines_count = -1;
 
-    history->nvd_section = calloc(HISTORY_LEN, sizeof(*history->nvd_section));
-    EXIT_IF(history->nvd_section == NULL, "calloc");
-
-    history->github_section = calloc(HISTORY_LEN, sizeof(*history->github_section));
-    EXIT_IF(history->github_section == NULL, "calloc");
-
-    history->parsing_section = calloc(HISTORY_LEN, sizeof(*history->parsing_section));
-    EXIT_IF(history->parsing_section == NULL, "calloc");
+    history->nvd_section = section_new("NVD DOWNLOAD HISTORY");
+    history->github_section = section_new("GITHUB DOWNLOAD HISTORY");
+    history->parsing_section = section_new("PARSING HISTORY");
 
     EXIT_IF(pthread_mutex_init(&history->lock, NULL) != 0, "pthread_mutex_init");
 
@@ -30,25 +42,19 @@ history_t *history_new(void) {
 void history_destroy(history_t *history) {
     pthread_mutex_destroy(&history->lock);
 
-    for (int i = 0; i < HISTORY_LEN; i++) {
-        free(history->nvd_section[i]);
-        free(history->github_section[i]);
-        free(history->parsing_section[i]);
-    }
-
-    free(history->nvd_section);
-    free(history->github_section);
-    free(history->parsing_section);
+    section_destroy(history->nvd_section);
+    section_destroy(history->github_section);
+    section_destroy(history->parsing_section);
 
     free(history);
 }
 
-static void display_section(history_t *history, char **section, const char *title) {
-    printf("\033[2K" LOG_C "%s" RESET_C "\n", title);
+static void display_section(history_t *history, history_section_t *section) {
+    printf("\033[2K" LOG_C "%s" RESET_C "\n", section->title);
 
-    for (int i = HISTORY_LEN - 1; i >= 0; i--) {
-        if (section[i] != NULL) {
-            printf("\033[2K" LOG_C "%s" RESET_C "\n", section[i]);
+    for (int i = SECTION_LEN - 1; i >= 0; i--) {
+        if (section->lines[i] != NULL) {
+            printf("\033[2K" LOG_C "%s" RESET_C "\n", section->lines[i]);
             history->previous_lines_count++;
         }
     }
@@ -68,34 +74,42 @@ void display_history(history_t *history) {
 
     history->previous_lines_count = 0;
 
-    display_section(history, history->nvd_section, "NVD DOWNLOAD HISTORY");
-    display_section(history, history->github_section, "GITHUB DOWNLOAD HISTORY");
-    display_section(history, history->parsing_section, "PARSING HISTORY");
+    display_section(history, history->nvd_section);
+    display_section(history, history->github_section);
+    display_section(history, history->parsing_section);
     fflush(stdout);
 }
 
-void history_push(history_t *history, char **section, char *line) {
+unsigned history_push(history_t *history, history_section_t *section, char *line) {
     pthread_mutex_lock(&history->lock);
-    free(section[HISTORY_LEN - 1]);
+    free(section->lines[SECTION_LEN - 1]);
 
-    for (int i = HISTORY_LEN - 1; i > 0; i--)
-        section[i] = section[i - 1];
+    for (int i = SECTION_LEN - 1; i > 0; i--)
+        section->lines[i] = section->lines[i - 1];
 
-    section[0] = line;
+    section->lines[0] = line;
+    unsigned line_number = ++section->pushed_lines_count;
 
     display_history(history);
     pthread_mutex_unlock(&history->lock);
+
+    return line_number;
 }
 
-void history_append(history_t *history, char **section, const char *suffix) {
+void history_append(history_t *history, history_section_t *section, unsigned line_number, const char *suffix) {
     pthread_mutex_lock(&history->lock);
-    char *line = NULL;
 
-    EXIT_IF(asprintf(&line, "%s   %s", section[0], suffix) == -1, "asprintf");
+    unsigned line_index = section->pushed_lines_count - line_number;
 
-    free(section[0]);
-    section[0] = line;
+    if (line_index < SECTION_LEN) {
+        char *line = NULL;
+        EXIT_IF(asprintf(&line, "%s%s", section->lines[line_index], suffix) == -1, "asprintf");
 
-    display_history(history);
+        free(section->lines[line_index]);
+        section->lines[line_index] = line;
+
+        display_history(history);
+    }
+
     pthread_mutex_unlock(&history->lock);
 }

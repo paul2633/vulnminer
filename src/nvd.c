@@ -74,9 +74,14 @@ static char *download_line(unsigned cwe_id, const char *start, const char *end, 
     char *line = NULL;
 
     if (total_pages == 0)
-        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   probing...", cwe_id, start, end) == -1, "asprintf");
-    else
-        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   fetching page %d/%d...", cwe_id, start, end, page, total_pages) == -1, "asprintf");
+        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   %-25s", cwe_id, start, end, "probing...") == -1, "asprintf");
+
+    else {
+        char *pages = NULL;
+        EXIT_IF(asprintf(&pages, "fetching page %d/%d...", page, total_pages) == -1, "asprintf");
+        EXIT_IF(asprintf(&line, "CWE-%-3u   %s-%s   %-25s", cwe_id, start, end, pages) == -1, "asprintf");
+        free(pages);
+    }
 
     return line;
 }
@@ -86,9 +91,9 @@ static void download_window(http_client_t *client, jobs_queue_t *queue, history_
     date_to_display(start_display, sizeof(start_display), window_start);
     date_to_display(end_display, sizeof(end_display), window_end);
 
-    history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, 0, 0));
+    unsigned line_number = history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, 0, 0));
     int total_results = probe_window(client, window_start, window_end, cwe_id);
-    // history_append(history, history->nvd_section, "complete");
+    history_append(history, history->nvd_section, line_number, "complete");
 
     int total_pages = (total_results + RESULTS_PER_PAGE - 1) / RESULTS_PER_PAGE;
 
@@ -96,13 +101,13 @@ static void download_window(http_client_t *client, jobs_queue_t *queue, history_
 
         char *url = parameters_to_url(RESULTS_PER_PAGE, i * RESULTS_PER_PAGE, window_start, window_end, cwe_id);
 
-        history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, total_pages - i, total_pages));
+        line_number = history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, total_pages - i, total_pages));
         yyjson_doc *doc = http_get_json(client, url);
         free(url);
 
         EXIT_IF(doc == NULL, "HTTP error 404");
 
-        // history_append(history, history->nvd_section, "complete");
+        history_append(history, history->nvd_section, line_number, "complete");
 
         nvd_parser_extract_commits(doc, queue);
         yyjson_doc_free(doc);
