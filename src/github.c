@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,19 +109,20 @@ void github_parse_commit(http_client_t *client, history_t *history, unsigned cwe
     char *url = NULL;
     EXIT_IF(asprintf(&url, "https://api.github.com/repos/%s/commits/%s", repo_name, commit_hash) == -1, "asprintf");
 
+    char *commit_str = NULL;
+    EXIT_IF(asprintf(&commit_str, "%s@%s", repo_name, commit_hash) == -1, "asprintf");
     char *line = NULL;
-    asprintf(&line, "%-15s   %-32.32s   probing...", cve_id, repo_name);
+    EXIT_IF(asprintf(&line, "%-15s   %-32.32s...   probing...", cve_id, commit_str) == -1, "asprintf");
+    free(commit_str);
 
-    yyjson_doc *doc = NULL;
+    unsigned line_number = history_push(history, history->github_section, line, true);
 
-    unsigned line_number = history_push(history, history->github_section, line);
-
-    doc = http_get_json(client, url);
+    yyjson_doc *doc = http_get_json(client, url);
 
     if (doc == NULL)
-        history_append(history, history->github_section, line_number, "   page not found");
+        history_append(history, history->github_section, line_number, "   page not found", HISTORY_STATUS_FAILED);
     else
-        history_append(history, history->github_section, line_number, "   complete");
+        history_append(history, history->github_section, line_number, "   complete", HISTORY_STATUS_SUCCEEDED);
 
     free(url);
 

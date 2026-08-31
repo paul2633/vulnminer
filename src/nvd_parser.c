@@ -4,6 +4,7 @@
 #include <string.h>
 #include <yyjson.h>
 
+#include "history.h"
 #include "jobs.h"
 #include "nvd_parser.h"
 #include "utils.h"
@@ -64,7 +65,7 @@ static char *extract_commit_hash(const char *url) {
     return strdup(commit + strlen(suffix));
 }
 
-static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve, unsigned cwe_id) {
+static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve, unsigned cwe_id, history_t *history) {
     yyjson_val *refs = yyjson_obj_get(cve, "references");
     if (refs == NULL || !yyjson_is_arr(refs))
         return;
@@ -97,11 +98,12 @@ static void nvd_parser_parse_cve(jobs_queue_t *queue, yyjson_val *cve, unsigned 
         char *id_cpy = strdup(id);
         EXIT_IF(id_cpy == NULL, "strdup");
 
+        history_increment_pending(history, history->github_section);
         push_new_job(queue, cwe_id, id_cpy, repo_name, commit_hash);
     }
 }
 
-void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue, unsigned cwe_id) {
+void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue, unsigned cwe_id, history_t *history) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
 
@@ -116,6 +118,6 @@ void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *queue, unsigned c
         yyjson_val *cve = yyjson_obj_get(vuln, "cve");
         EXIT_IF(cve == NULL || !yyjson_is_obj(cve), "cve");
 
-        nvd_parser_parse_cve(queue, cve, cwe_id);
+        nvd_parser_parse_cve(queue, cve, cwe_id, history);
     }
 }

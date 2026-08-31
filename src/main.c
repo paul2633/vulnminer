@@ -23,8 +23,6 @@ int main(int argc, char **argv) {
 
     history_t *history = history_new();
 
-    display_history(history);
-
     jobs_queue_t *queue = jobs_queue_new();
 
     http_client_t *github_client = github_client_new(config->github_api_key);

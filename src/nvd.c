@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -86,14 +87,18 @@ static char *download_line(unsigned cwe_id, const char *start, const char *end, 
     return line;
 }
 
-static void download_window(http_client_t *client, jobs_queue_t *queue, history_t *history, time_t window_start, time_t window_end, unsigned cwe_id) {
+static void download_window(http_client_t *client, jobs_queue_t *queue, history_t *history, time_t window_start, time_t window_end, unsigned cwe_id,
+                            bool first_window, bool last_window) {
     char start_display[11], end_display[11];
     date_to_display(start_display, sizeof(start_display), window_start);
     date_to_display(end_display, sizeof(end_display), window_end);
 
-    unsigned line_number = history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, 0, 0));
+    char *line = download_line(cwe_id, start_display, end_display, 0, 0);
+    unsigned line_number = history_push(history, history->nvd_section, line, first_window);
     int total_results = probe_window(client, window_start, window_end, cwe_id);
-    history_append(history, history->nvd_section, line_number, "complete");
+
+    history_status_t status = (last_window && total_results == 0) ? HISTORY_STATUS_SUCCEEDED : HISTORY_STATUS_NONE;
+    history_append(history, history->nvd_section, line_number, "complete", status);
 
     int total_pages = (total_results + RESULTS_PER_PAGE - 1) / RESULTS_PER_PAGE;
 
@@ -101,21 +106,25 @@ static void download_window(http_client_t *client, jobs_queue_t *queue, history_
 
         char *url = parameters_to_url(RESULTS_PER_PAGE, i * RESULTS_PER_PAGE, window_start, window_end, cwe_id);
 
-        line_number = history_push(history, history->nvd_section, download_line(cwe_id, start_display, end_display, total_pages - i, total_pages));
+        line = download_line(cwe_id, start_display, end_display, total_pages - i, total_pages);
+        line_number = history_push(history, history->nvd_section, line, false);
         yyjson_doc *doc = http_get_json(client, url);
         free(url);
 
         EXIT_IF(doc == NULL, "HTTP error 404");
 
-        history_append(history, history->nvd_section, line_number, "complete");
+        status = (last_window && i == 0) ? HISTORY_STATUS_SUCCEEDED : HISTORY_STATUS_NONE;
+        history_append(history, history->nvd_section, line_number, "complete", status);
 
-        nvd_parser_extract_commits(doc, queue, cwe_id);
+        nvd_parser_extract_commits(doc, queue, cwe_id, history);
         yyjson_doc_free(doc);
     }
 }
 
 void nvd_request(const config_t *config, jobs_queue_t *queue, history_t *history) {
     http_client_t *nvd_client = nvd_client_new(config->nvd_api_key);
+
+    history_set_pending(history, history->nvd_section, config->cwe_ids_count);
 
     for (unsigned i = 0; i < config->cwe_ids_count; i++) {
 
@@ -126,7 +135,10 @@ void nvd_request(const config_t *config, jobs_queue_t *queue, history_t *history
 
         while (window_end > window_start) {
 
-            download_window(nvd_client, queue, history, window_start, window_end, config->cwe_ids[i]);
+            bool first_window = window_end == config->cve_published_before;
+            bool last_window = window_start == config->cve_published_after;
+
+            download_window(nvd_client, queue, history, window_start, window_end, config->cwe_ids[i], first_window, last_window);
 
             window_end -= DAYS(DAYS_PER_WINDOW);
             window_start -= DAYS(DAYS_PER_WINDOW);
