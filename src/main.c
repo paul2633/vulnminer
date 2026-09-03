@@ -12,7 +12,7 @@
 #include "utils.h"
 
 #define GITHUB_THREADS 1
-#define PARSING_THREADS 3
+#define PARSING_THREADS 1
 
 int main(int argc, char **argv) {
 

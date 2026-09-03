@@ -20,6 +20,28 @@ int nvd_parser_get_total_results(yyjson_doc *doc) {
     return yyjson_get_int(total);
 }
 
+static char *nvd_parser_get_description(yyjson_val *cve) {
+    yyjson_val *descriptions = yyjson_obj_get(cve, "descriptions");
+    if (descriptions == NULL || !yyjson_is_arr(descriptions))
+        return NULL;
+
+    yyjson_val *description;
+    size_t i, max;
+
+    yyjson_arr_foreach(descriptions, i, max, description) {
+        yyjson_val *lang = yyjson_obj_get(description, "lang");
+        yyjson_val *value = yyjson_obj_get(description, "value");
+
+        if (lang == NULL || !yyjson_is_str(lang) || value == NULL || !yyjson_is_str(value))
+            continue;
+
+        if (strcmp(yyjson_get_str(lang), "en") == 0)
+            return strdup(yyjson_get_str(value));
+    }
+
+    return NULL;
+}
+
 static bool nvd_parser_check_is_patch(yyjson_val *tags) {
     if (tags == NULL || !yyjson_is_arr(tags))
         return false;
@@ -71,6 +93,8 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
     if (refs == NULL || !yyjson_is_arr(refs))
         return;
 
+    char *cve_description = nvd_parser_get_description(cve);
+
     yyjson_val *ref;
     size_t i, max;
 
@@ -96,7 +120,7 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
         const char *cve_id = yyjson_get_str(yyjson_obj_get(cve, "id"));
         EXIT_IF(cve_id == NULL, "id");
 
-        dataset_entry_t *entry = dataset_entry_new(cwe_id, cve_id, repo_name, commit_hash);
+        dataset_entry_t *entry = dataset_entry_new(cwe_id, cve_id, repo_name, commit_hash, cve_description);
 
         free(repo_name);
         free(commit_hash);
@@ -104,6 +128,8 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
         history_increment_pending(history, history->github_section);
         push_new_job(github_queue, entry);
     }
+
+    free(cve_description);
 }
 
 void nvd_parser_extract_commits(yyjson_doc *doc, jobs_queue_t *github_queue, unsigned cwe_id, history_t *history) {

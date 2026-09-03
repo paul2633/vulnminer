@@ -6,7 +6,7 @@
 #include "utils.h"
 
 #define HISTORY_SECTIONS 3
-#define SECTION_LEN 5
+#define SECTION_LEN 3
 
 static history_line_t *line_new(const char *prefix, const char *suffix) {
     history_line_t *line = calloc(1, sizeof(*line));

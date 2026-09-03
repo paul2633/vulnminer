@@ -81,5 +81,14 @@ unsigned github_parser_parse_commit(const config_t *config, dataset_entry_t *ent
     entry->parent_commit_hash = strdup(yyjson_get_str(parent_sha));
     EXIT_IF(entry->parent_commit_hash == NULL, "strdup");
 
+    yyjson_val *commit = yyjson_obj_get(root, "commit");
+    EXIT_IF(commit == NULL || !yyjson_is_obj(commit), "commit");
+
+    yyjson_val *message = yyjson_obj_get(commit, "message");
+    EXIT_IF(message == NULL || !yyjson_is_str(message), "message");
+
+    entry->commit_message = strdup(yyjson_get_str(message));
+    EXIT_IF(entry->commit_message == NULL, "strdup");
+
     return parse_commit_files(config, entry, root);
 }

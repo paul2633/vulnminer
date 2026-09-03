@@ -24,13 +24,14 @@ typedef struct {
 
 typedef struct {
     unsigned cwe_id;
-    char *cve_id;
-    char *repo_name;
-    char *commit_hash;
 
+    char *cve_id;
     char *cve_description;
-    char *parent_commit_hash;
+
+    char *repo_name;
     char *commit_message;
+    char *commit_hash;
+    char *parent_commit_hash;
 
     dataset_file_t **files;
     unsigned files_count;
@@ -38,7 +39,7 @@ typedef struct {
 
 dataset_file_t *dataset_file_new(const char *path);
 
-dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash);
+dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash, const char *cve_description);
 
 void dataset_entry_destroy(dataset_entry_t *entry);
 

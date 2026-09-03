@@ -21,7 +21,7 @@ static void dataset_file_destroy(dataset_file_t *file) {
     free(file);
 }
 
-dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash) {
+dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash, const char *cve_description) {
     dataset_entry_t *entry = calloc(1, sizeof(*entry));
     EXIT_IF(entry == NULL, "calloc");
 
@@ -35,6 +35,9 @@ dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const ch
 
     entry->commit_hash = strdup(commit_hash);
     EXIT_IF(entry->commit_hash == NULL, "strdup");
+
+    entry->cve_description = strdup(cve_description);
+    EXIT_IF(entry->cve_description == NULL, "strdup");
 
     return entry;
 }

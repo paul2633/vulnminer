@@ -11,16 +11,6 @@
 #include "parser.h"
 #include "utils.h"
 
-static void json_write(FILE *f, unsigned indent, const char *fmt, ...) {
-    for (unsigned i = 0; i < indent; i++)
-        EXIT_IF(fputs("    ", f) == EOF, "fputs");
-
-    va_list ap;
-    va_start(ap, fmt);
-    EXIT_IF(vfprintf(f, fmt, ap) < 0, "vfprintf");
-    va_end(ap);
-}
-
 void parser_export_commit(void *global_context, void *local_context) {
 
     parser_global_context_t *global = global_context;
@@ -56,26 +46,75 @@ void parser_export_commit(void *global_context, void *local_context) {
     FILE *f = fdopen(fd, "w");
     EXIT_IF(f == NULL, "fdopen");
 
-    json_write(f, 0, "{\n");
-    json_write(f, 1, "\"CWE\": \"CWE-%u\",\n", entry->cwe_id);
-    json_write(f, 1, "\"CVE\": \"%s\",\n", entry->cve_id);
-    json_write(f, 1, "\"repository\": \"%s\",\n", entry->repo_name);
-    json_write(f, 1, "\"commit\": \"%s\",\n", entry->commit_hash);
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    EXIT_IF(doc == NULL, "yyjson_mut_doc_new");
 
-    json_write(f, 1, "\"files\": [\n");
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    EXIT_IF(root == NULL, "yyjson_mut_obj");
+
+    yyjson_mut_doc_set_root(doc, root);
+
+    yyjson_mut_obj_add_uint(doc, root, "CWE", entry->cwe_id);
+    yyjson_mut_obj_add_str(doc, root, "CVE", entry->cve_id);
+    yyjson_mut_obj_add_str(doc, root, "CVE_description", entry->cve_description);
+    yyjson_mut_obj_add_str(doc, root, "repository", entry->repo_name);
+    yyjson_mut_obj_add_str(doc, root, "commit_hash", entry->commit_hash);
+    yyjson_mut_obj_add_str(doc, root, "commit_message", entry->commit_message);
+
+    yyjson_mut_val *included_files = yyjson_mut_arr(doc);
+
     for (unsigned i = 0; i < entry->files_count; i++) {
-        json_write(f, 2, "{\n");
+        if (entry->files[i]->state == ONGOING) {
+            yyjson_mut_val *file = yyjson_mut_obj(doc);
 
-        json_write(f, 3, "\"path\": \"%s\"\n", entry->files[i]->path);
+            yyjson_mut_obj_add_str(doc, file, "path", entry->files[i]->path);
 
-        if (i < entry->files_count - 1)
-            json_write(f, 2, "},\n");
-        else
-            json_write(f, 2, "}\n");
+            yyjson_mut_arr_add_val(included_files, file);
+        }
     }
-    json_write(f, 1, "]\n");
 
-    json_write(f, 0, "}\n");
+    yyjson_mut_obj_add_val(doc, root, "included_files", included_files);
+
+    yyjson_mut_val *excluded_files = yyjson_mut_arr(doc);
+
+    for (unsigned i = 0; i < entry->files_count; i++) {
+        if (entry->files[i]->state != ONGOING) {
+            yyjson_mut_val *file = yyjson_mut_obj(doc);
+
+            yyjson_mut_obj_add_str(doc, file, "path", entry->files[i]->path);
+
+            switch (entry->files[i]->state) {
+                case ONGOING:
+                    yyjson_mut_obj_add_str(doc, file, "reason", "unknown");
+                    break;
+                case FILE_NOT_MODIFIED:
+                    yyjson_mut_obj_add_str(doc, file, "reason", "not_modified");
+                    break;
+                case EXTENSION_NOT_SUPPORTED:
+                    yyjson_mut_obj_add_str(doc, file, "reason", "unsupported_extension");
+                    break;
+                case FILE_CONTENT_UNAVAILABLE:
+                    yyjson_mut_obj_add_str(doc, file, "reason", "content_unavailable");
+                    break;
+                case NO_MODIFIED_FUNCTION:
+                    yyjson_mut_obj_add_str(doc, file, "reason", "no_modified_function");
+                    break;
+            }
+
+            yyjson_mut_arr_add_val(excluded_files, file);
+        }
+    }
+
+    yyjson_mut_obj_add_val(doc, root, "excluded_files", excluded_files);
+
+    size_t len;
+    const char *json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY, &len);
+    EXIT_IF(json == NULL, "yyjson_mut_write");
+
+    EXIT_IF(fwrite(json, 1, len, f) != len, "fwrite");
+
+    free((void *)json);
+    yyjson_mut_doc_free(doc);
 
     EXIT_IF(fclose(f) == EOF, "fclose");
 
