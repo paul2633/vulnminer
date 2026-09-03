@@ -82,7 +82,10 @@ if(CPPCHECK)
                 --enable=all
                 --inconclusive
                 --suppress=missingIncludeSystem
+                -I${PROJECT_SOURCE_DIR}/src
+                -isystem${PROJECT_SOURCE_DIR}/third_party/yyjson/src
                 ${PROJECT_SOURCE_DIR}/src
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
 endif()
 

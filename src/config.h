@@ -19,6 +19,8 @@ typedef struct {
 
     bool include_c_files;
     bool include_cpp_files;
+
+    char *export_folder_path;
 } config_t;
 
 config_t *config_new(int argc, char **argv);

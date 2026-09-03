@@ -28,6 +28,8 @@ void http_client_destroy(http_client_t *client);
 
 void http_client_add_header(http_client_t *client, const char *header);
 
+char *http_get_str(http_client_t *client, const char *url, size_t *response_size);
+
 yyjson_doc *http_get_json(http_client_t *client, const char *url);
 
 #endif

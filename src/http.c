@@ -93,7 +93,7 @@ static CURLcode http_get(http_client_t *client, const char *url, http_response_t
     return err;
 }
 
-yyjson_doc *http_get_json(http_client_t *client, const char *url) {
+char *http_get_str(http_client_t *client, const char *url, size_t *response_size) {
     pthread_mutex_lock(&client->lock);
 
     while (true) {
@@ -130,10 +130,21 @@ yyjson_doc *http_get_json(http_client_t *client, const char *url) {
             return NULL;
         }
 
-        yyjson_doc *doc = yyjson_read(response.data, response.size, 0);
-        free(response.data);
-        EXIT_IF(doc == NULL, "yyjson_read");
-
-        return doc;
+        *response_size = response.size;
+        return response.data;
     }
+}
+
+yyjson_doc *http_get_json(http_client_t *client, const char *url) {
+    size_t response_size = 0;
+    char *response_data = http_get_str(client, url, &response_size);
+
+    if (response_data == NULL)
+        return NULL;
+
+    yyjson_doc *doc = yyjson_read(response_data, response_size, 0);
+    free(response_data);
+    EXIT_IF(doc == NULL, "yyjson_read");
+
+    return doc;
 }

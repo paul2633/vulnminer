@@ -1,13 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "github.h"
 #include "jobs.h"
 #include "utils.h"
 
-jobs_queue_t *jobs_queue_new(void) {
+jobs_queue_t *jobs_queue_new(job_function_t function, void *global_context) {
     jobs_queue_t *queue = calloc(1, sizeof(*queue));
     EXIT_IF(queue == NULL, "calloc");
+
+    queue->function = function;
+    queue->global_context = global_context;
 
     EXIT_IF(pthread_mutex_init(&queue->lock, NULL) != 0, "pthread_mutex_init");
     EXIT_IF(pthread_cond_init(&queue->cond, NULL) != 0, "pthread_cond_init");
@@ -30,27 +32,11 @@ void jobs_queue_finish(jobs_queue_t *queue) {
     pthread_mutex_unlock(&queue->lock);
 }
 
-static job_t *job_new(unsigned cwe_id, char *cve_id, char *repo_name, char *commit_hash) {
+void push_new_job(jobs_queue_t *queue, void *local_context) {
     job_t *job = calloc(1, sizeof(*job));
     EXIT_IF(job == NULL, "calloc");
+    job->local_context = local_context;
 
-    job->cwe_id = cwe_id;
-    job->cve_id = cve_id;
-    job->repo_name = repo_name;
-    job->commit_hash = commit_hash;
-
-    return job;
-}
-
-static void job_destroy(job_t *job) {
-    free(job->cve_id);
-    free(job->repo_name);
-    free(job->commit_hash);
-    free(job);
-}
-
-void push_new_job(jobs_queue_t *queue, unsigned cwe_id, char *cve_id, char *repo_name, char *commit_hash) {
-    job_t *job = job_new(cwe_id, cve_id, repo_name, commit_hash);
     pthread_mutex_lock(&queue->lock);
 
     if (queue->tail == NULL)
@@ -85,17 +71,15 @@ static job_t *pop_job(jobs_queue_t *queue) {
 }
 
 void *worker(void *arg) {
-    workers_context_t *context = arg;
+    jobs_queue_t *queue = arg;
 
     while (true) {
-        job_t *job = pop_job(context->queue);
-
+        job_t *job = pop_job(queue);
         if (job == NULL)
             break;
 
-        github_parse_commit(context->github_client, context->history, job->cwe_id, job->cve_id, job->repo_name, job->commit_hash);
-
-        job_destroy(job);
+        queue->function(queue->global_context, job->local_context);
+        free(job);
     }
 
     return NULL;

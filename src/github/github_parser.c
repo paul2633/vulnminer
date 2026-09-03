@@ -22,7 +22,48 @@ static bool extension_is_supported(const config_t *config, const char *path) {
     return false;
 }
 
-bool github_parser_parse_infos(dataset_entry_t *entry, yyjson_doc *doc) {
+static unsigned parse_commit_files(const config_t *config, dataset_entry_t *entry, yyjson_val *root) {
+    yyjson_val *files = yyjson_obj_get(root, "files");
+    EXIT_IF(files == NULL || !yyjson_is_arr(files), "files");
+
+    unsigned files_count = yyjson_arr_size(files);
+
+    entry->files = calloc(files_count, sizeof(*entry->files));
+    EXIT_IF(entry->files == NULL && files_count != 0, "calloc");
+
+    entry->files_count = files_count;
+
+    yyjson_val *file;
+    size_t i, max;
+
+    unsigned files_to_download = 0;
+
+    yyjson_arr_foreach(files, i, max, file) {
+        yyjson_val *path = yyjson_obj_get(file, "filename");
+        EXIT_IF(path == NULL || !yyjson_is_str(path), "filename");
+
+        entry->files[i] = dataset_file_new(yyjson_get_str(path));
+
+        yyjson_val *status = yyjson_obj_get(file, "status");
+        EXIT_IF(status == NULL || !yyjson_is_str(status), "status");
+
+        if (strcmp(yyjson_get_str(status), "modified") != 0) {
+            entry->files[i]->state = FILE_NOT_MODIFIED;
+            continue;
+        }
+
+        if (!extension_is_supported(config, entry->files[i]->path)) {
+            entry->files[i]->state = EXTENSION_NOT_SUPPORTED;
+            continue;
+        }
+
+        files_to_download++;
+    }
+
+    return files_to_download;
+}
+
+unsigned github_parser_parse_commit(const config_t *config, dataset_entry_t *entry, yyjson_doc *doc) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
 
@@ -30,7 +71,7 @@ bool github_parser_parse_infos(dataset_entry_t *entry, yyjson_doc *doc) {
     EXIT_IF(parents == NULL || !yyjson_is_arr(parents), "parents");
 
     if (yyjson_arr_size(parents) != 1)
-        return false;
+        return 0;
 
     yyjson_val *parent = yyjson_arr_get_first(parents);
     yyjson_val *parent_sha = yyjson_obj_get(parent, "sha");
@@ -40,83 +81,5 @@ bool github_parser_parse_infos(dataset_entry_t *entry, yyjson_doc *doc) {
     entry->parent_commit_hash = strdup(yyjson_get_str(parent_sha));
     EXIT_IF(entry->parent_commit_hash == NULL, "strdup");
 
-    yyjson_val *commit = yyjson_obj_get(root, "commit");
-    EXIT_IF(commit == NULL || !yyjson_is_obj(commit), "commit");
-
-    yyjson_val *message = yyjson_obj_get(commit, "message");
-    EXIT_IF(message == NULL || !yyjson_is_str(message), "message");
-
-    entry->commit_message = strdup(yyjson_get_str(message));
-    EXIT_IF(entry->commit_message == NULL, "strdup");
-
-    return true;
-}
-
-static dataset_file_t *parse_file(const config_t *config, yyjson_val *file) {
-    yyjson_val *path = yyjson_obj_get(file, "filename");
-    EXIT_IF(path == NULL || !yyjson_is_str(path), "filename");
-
-    yyjson_val *status = yyjson_obj_get(file, "status");
-    EXIT_IF(status == NULL || !yyjson_is_str(status), "status");
-
-    const char *path_str = yyjson_get_str(path);
-    const char *previous_path_str = path_str;
-    const char *status_str = yyjson_get_str(status);
-
-    EXIT_IF(strcmp(status_str, "modified") != 0 && strcmp(status_str, "added") != 0 && strcmp(status_str, "removed") != 0 && strcmp(status_str, "renamed") != 0,
-            "file status \"%s\" not supported",
-            status_str);
-
-    if (!extension_is_supported(config, path_str))
-        return NULL;
-
-    if (strcmp(status_str, "renamed") == 0) {
-        yyjson_val *previous_path = yyjson_obj_get(file, "previous_filename");
-        EXIT_IF(previous_path == NULL || !yyjson_is_str(previous_path), "previous_filename");
-
-        previous_path_str = yyjson_get_str(previous_path);
-
-        const char *old_ext = strrchr(previous_path_str, '.');
-        const char *new_ext = strrchr(path_str, '.');
-
-        if (old_ext == NULL || new_ext == NULL || strcmp(old_ext, new_ext) != 0)
-            return NULL;
-    }
-
-    else if (strcmp(status_str, "removed") == 0)
-        path_str = NULL;
-
-    else if (strcmp(status_str, "added") == 0)
-        previous_path_str = NULL;
-
-    return dataset_file_new(path_str, previous_path_str, status_str);
-}
-
-bool github_parser_parse_files(const config_t *config, dataset_entry_t *entry, yyjson_doc *doc) {
-    yyjson_val *root = yyjson_doc_get_root(doc);
-    EXIT_IF(root == NULL, "yyjson_doc_get_root");
-
-    yyjson_val *files = yyjson_obj_get(root, "files");
-    EXIT_IF(files == NULL || !yyjson_is_arr(files), "files");
-
-    entry->files_count = yyjson_arr_size(files);
-    if (entry->files_count == 0)
-        return false;
-
-    entry->files = calloc(entry->files_count, sizeof(*entry->files));
-    EXIT_IF(entry->files == NULL && entry->files_count != 0, "calloc");
-
-    yyjson_val *file;
-    size_t i, max;
-
-    yyjson_arr_foreach(files, i, max, file) {
-        dataset_file_t *dataset_file = parse_file(config, file);
-
-        if (dataset_file == NULL)
-            return false;
-
-        entry->files[i] = dataset_file;
-    }
-
-    return true;
+    return parse_commit_files(config, entry, root);
 }
