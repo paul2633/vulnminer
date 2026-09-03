@@ -10,11 +10,11 @@ SVA VulnMiner currently supports **Linux systems only**.
 
 The following dependencies are required:
 
-- A C compiler
+- CMake >= 3.20
+- GCC or Clang
 - libcurl
-- pthreads
 
-Tree-sitter and yyjson are included in the `third-party/` directory and do not need to be installed separately.
+Tree-sitter and yyjson are included in the `third_party/` directory and do not need to be installed separately.
 
 ## Build
 
@@ -31,34 +31,39 @@ The program is configured through a `config.ini` file.
 
 From the `build/` directory, run:
 
-    ./repo_analyzer
+    ./vulnminer
 
 By default, the program looks for the configuration file at:
 
     ../config.ini
 
-A different configuration file can be specified with the `-o` option:
+A different configuration file can be specified with the `-i` option:
 
-    ./repo_analyzer -o /path/to/config.ini
+    ./vulnminer -i /path/to/config.ini
+
+By default, the program looks for the generated dataset export folder at:
+
+    ../results
+
+A different export folder can be specified with the `-o` option:
+
+    ./vulnminer -o /path/to/folder
 
 ## Configuration
 
 Example configuration:
 
-    cwe-ids=79,80
-
-    cve-published-before=30/08/2026
-    cve-published-after=01/01/2023
-
+    cwe-ids=787,476,190,125,79
+    cve-published-before=01/09/2026
+    cve-published-after=01/05/2026
     nvd-api-key=YOUR_NVD_API_KEY
     github-api-key=YOUR_GITHUB_API_KEY
-
     include-c-files=yes
     include-cpp-files=yes
 
 ### CWE IDs
 
-    cwe-ids=79,80
+    cwe-ids=787,476,190,125,79
 
 Comma-separated list of CWE IDs to retrieve from the NVD.
 
@@ -70,8 +75,8 @@ will retrieve CVEs associated with CWE-79 and CWE-80.
 
 ### CVE publication dates
 
-    cve-published-before=30/08/2026
-    cve-published-after=01/01/2023
+    cve-published-before=01/09/2026
+    cve-published-after=01/05/2026
 
 Defines the publication date range of the CVEs to retrieve.
 
@@ -89,7 +94,7 @@ If `cve-published-after` is not specified or invalid, `01/01/1999` is used.
 
 API key used to query the NVD API.
 
-**The key is optional, but using one is strongly recommended.**
+**The key is optional, but using one is strongly recommended (otherwise the download speed from the NVD API will be very limited).**
 
 ### GitHub API key
 
@@ -97,11 +102,11 @@ API key used to query the NVD API.
 
 GitHub personal access token used to query the GitHub API.
 
-**The key is optional, but using one is strongly recommended.**
+**The key is optional, but using one is strongly recommended (otherwise the download speed from the GitHub API will be very limited).**
 
 ### Source file types
 
-The following options control which source files are kept when processing a commit:
+The following options control which source files are considered when processing a commit:
 
     include-c-files=yes
     include-cpp-files=yes
@@ -138,19 +143,22 @@ will include C files while ignoring C++ files.
 The current processing pipeline is:
 
 1. Query the NVD for the selected CWE IDs and publication date range.
-2. Extract references associated with the CVEs.
-3. Keep GitHub commit references tagged as `Patch`.
-4. Add the corresponding commits to a job queue.
-5. Process the jobs in parallel using worker threads.
-6. Query the GitHub API for each commit.
-7. Retrieve the commit metadata, parent commit information, and modified files.
+2. Extract CVE information, including the CVE identifier and English description.
+3. Extract references associated with the CVEs.
+4. Keep GitHub commit references tagged as `Patch`.
+5. Create dataset entries for the corresponding GitHub commits.
+6. Add the commits to a job queue.
+7. Process GitHub jobs using worker threads.
+8. Query the GitHub API for each commit.
+9. Retrieve the commit parent information, commit message, and modified files.
+10. Filter files according to their status and configured file extensions.
+11. Retrieve the complete file versions before and after the commit.
+12. Add successfully retrieved entries to the parsing queue.
+13. Export the resulting dataset entry as a JSON file.
 
-The following steps are currently under development:
+The following step is currently under development:
 
-8. Filter files according to their status and configured file extensions.
-9. Retrieve the complete file versions before and after the commit.
-10. Parse the files using Tree-sitter to identify modified functions/methods.
-11. Generate the final JSON dataset entries.
+14. Parse the files using Tree-sitter to identify modified functions/methods.
 
 ## Commit filtering
 
@@ -162,21 +170,35 @@ Some commits may no longer be available and return a `404` error. These commits 
 
 ### File extensions
 
-Only file types enabled in the configuration are considered.
+Only file types enabled in the configuration are considered for further processing.
 
-Other file types are currently ignored, even though they may provide useful context for understanding the vulnerability fix.
+The currently supported source file extensions are:
+
+- `.c`
+- `.h`
+- `.cpp`
+- `.hpp`
+
+Other file types are retained in the dataset as excluded files with an `unsupported_extension` reason.
 
 ### File status
 
-Only files with the `modified` status are currently kept.
+GitHub can report files with different statuses, including:
 
-GitHub can also report files as:
-
+- `modified`
 - `added`
 - `deleted`
 - `renamed`
 
-These cases may be useful, but the current version focuses on files for which both a before and an after version can be obtained.
+Only files with the `modified` status are currently considered for further processing.
+
+Other statuses are retained as excluded files with a `not_modified` reason.
+
+### File content
+
+For modified and supported files, the complete file content is retrieved both before and after the commit.
+
+If either version cannot be retrieved, the file is excluded with a `content_unavailable` reason.
 
 ### Multiple parent commits
 
@@ -190,26 +212,56 @@ The unified diff returned by GitHub cannot necessarily be used to reconstruct th
 
 The goal is to generate one JSON file for each dataset entry.
 
-Each entry will contain the files retained from the commit and, for each file, the functions or methods affected by the change together with their complete before and after versions.
+Each entry contains the CVE information, repository and commit information, and the files processed from the commit.
 
-The intended structure is approximately:
+Files are divided into two groups:
+
+- `included_files`: files for which both the before and after versions were successfully retrieved and which can be processed by the parsing stage.
+- `excluded_files`: files that were not retained for further processing, together with the reason for their exclusion.
+
+The current JSON structure is:
 
     {
-        "files": [
+        "CWE": 787,
+        "CVE": "CVE-2026-45328",
+        "CVE_description": "...",
+        "repository": "espressif/esp-idf",
+        "commit_hash": "7867f4a57560bf9fc4a931e37ba02b7a3e9f406b",
+        "commit_message": "...",
+        "included_files": [
             {
-                "path": "src/example.c",
-                "functions": [
-                    {
-                        "name": "example_function",
-                        "before": "...",
-                        "after": "..."
-                    }
-                ]
+                "path": "src/example.c"
+            }
+        ],
+        "excluded_files": [
+            {
+                "path": "README.md",
+                "reason": "unsupported_extension"
+            },
+            {
+                "path": "other.c",
+                "reason": "content_unavailable"
             }
         ]
     }
 
-The exact dataset format is still under development.
+The `included_files` entries will be extended by the Tree-sitter parsing stage to contain the modified functions or methods and their complete before and after versions.
+
+## Output files
+
+Generated dataset entries are written to the configured export directory.
+
+Output filenames follow the format:
+
+    CWE-<CWE>_<CVE>_<repository>_<commit>.json
+
+where `<commit>` is the first 8 characters of the commit hash.
+
+For example:
+
+    CWE-787_CVE-2026-45328_esp-idf_7867f4a5.json
+
+Existing files are not overwritten.
 
 ## Development
 
@@ -218,9 +270,10 @@ The following tools can be used to check the code during development:
 - Valgrind
 - Cppcheck
 - Include-What-You-Use
+- clang-format
 
 For example:
 
-    valgrind --leak-check=full ./repo_analyzer
+    valgrind --leak-check=full ./vulnminer
 
 These tools are not required to run SVA VulnMiner.

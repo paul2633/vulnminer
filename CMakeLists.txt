@@ -1,11 +1,12 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.20)
 
-project(repo_analyzer C)
+project(vulnminer C)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 
 add_compile_options(
@@ -39,18 +40,19 @@ target_compile_options(tree_sitter PRIVATE
     -w
 )
 
-add_executable(repo_analyzer ${SRC})
+add_executable(vulnminer ${SRC})
 
-target_compile_definitions(repo_analyzer PRIVATE _GNU_SOURCE)
+target_compile_definitions(vulnminer PRIVATE _GNU_SOURCE)
 
-target_include_directories(repo_analyzer PRIVATE
+target_include_directories(vulnminer PRIVATE
     src
 )
 
-target_link_libraries(repo_analyzer PRIVATE
+target_link_libraries(vulnminer PRIVATE
     tree_sitter
     yyjson
     CURL::libcurl
+    Threads::Threads
 )
 
 # -----------------------------------------------------------------------------
