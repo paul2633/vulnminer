@@ -2,7 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include <yyjson.h>
+#include <curl/curl.h>
+#include <pthread.h>
 
 #include "config.h"
 #include "history.h"
@@ -17,6 +20,7 @@
 #define NVD_API "https://services.nvd.nist.gov/rest/json/cves/2.0"
 #define RESULTS_PER_PAGE 100
 #define DAYS_PER_WINDOW 120
+#define NVD_MAX_DELAY 16
 
 static http_client_t *nvd_client_new(const char *api_key) {
     http_client_t *nvd_client = http_client_new();
@@ -29,6 +33,45 @@ static http_client_t *nvd_client_new(const char *api_key) {
     }
 
     return nvd_client;
+}
+
+static yyjson_doc *nvd_get(http_client_t *client, const char *url) {
+    pthread_mutex_lock(&client->lock);
+
+    while (true) {
+        sleep(client->delay);
+
+        http_response_t response = {0};
+        long status = 0;
+
+        CURLcode err = http_get(client, url, &response, &status);
+
+        if (err == CURLE_OPERATION_TIMEDOUT) {
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        EXIT_IF(err != CURLE_OK, curl_easy_strerror(err));
+
+        if (status == 429) {
+            client->delay = client->delay == 0 ? 1 : client->delay * 2 > NVD_MAX_DELAY ? client->delay : client->delay * 2;
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        EXIT_IF(status < 200 || status >= 300, "HTTP error %ld", status);
+
+        client->delay /= 2;
+        pthread_mutex_unlock(&client->lock);
+
+        yyjson_doc *doc = yyjson_read(response.data, response.size, 0);
+        free(response.data);
+        EXIT_IF(doc == NULL, "yyjson_read");
+
+        return doc;
+    }
 }
 
 static void date_to_str(char *dst, size_t size, time_t date, bool url_format) {
@@ -56,20 +99,6 @@ static char *parameters_to_url(int results_per_page, int start_index, time_t win
     return url;
 }
 
-static int probe_window(http_client_t *client, time_t window_start, time_t window_end, unsigned cwe_id) {
-    char *url = parameters_to_url(0, 0, window_start, window_end, cwe_id);
-
-    yyjson_doc *doc = http_get_json(client, url);
-    free(url);
-
-    EXIT_IF(doc == NULL, "HTTP error 404");
-
-    int result = nvd_parser_get_total_results(doc);
-    yyjson_doc_free(doc);
-
-    return result;
-}
-
 static void download_window(http_client_t *client, jobs_queue_t *github_queue, history_t *history, unsigned line_number, time_t window_start, time_t window_end,
                             unsigned cwe_id) {
     char start_display[sizeof("DD/MM/YYYY")], end_display[sizeof("DD/MM/YYYY")];
@@ -81,22 +110,24 @@ static void download_window(http_client_t *client, jobs_queue_t *github_queue, h
     history_update_line(history, history->nvd_section, line_number, suffix, false);
     free(suffix);
 
-    int total_results = probe_window(client, window_start, window_end, cwe_id);
+    char *url = parameters_to_url(0, 0, window_start, window_end, cwe_id);
+    yyjson_doc *doc = nvd_get(client, url);
+    free(url);
+
+    int total_results = nvd_parser_get_total_results(doc);
+    yyjson_doc_free(doc);
 
     int total_pages = (total_results + RESULTS_PER_PAGE - 1) / RESULTS_PER_PAGE;
 
     for (int i = total_pages - 1; i >= 0; i--) {
 
-        char *url = parameters_to_url(RESULTS_PER_PAGE, i * RESULTS_PER_PAGE, window_start, window_end, cwe_id);
-
         EXIT_IF(asprintf(&suffix, "%s-%s   fetching page %d/%d...", start_display, end_display, total_pages - i, total_pages) == -1, "asprintf");
         history_update_line(history, history->nvd_section, line_number, suffix, false);
         free(suffix);
 
-        yyjson_doc *doc = http_get_json(client, url);
+        url = parameters_to_url(RESULTS_PER_PAGE, i * RESULTS_PER_PAGE, window_start, window_end, cwe_id);
+        doc = nvd_get(client, url);
         free(url);
-
-        EXIT_IF(doc == NULL, "HTTP error 404");
 
         nvd_parser_extract_commits(doc, github_queue, cwe_id, history);
         yyjson_doc_free(doc);

@@ -1,8 +1,11 @@
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 #include <yyjson.h>
+#include <curl/curl.h>
+#include <pthread.h>
 
 #include "dataset.h"
 #include "github.h"
@@ -12,29 +15,115 @@
 #include "jobs.h"
 #include "utils.h"
 
+#define TIME_BETWEEN_REQUESTS 1
+
 http_client_t *github_client_new(const char *api_key) {
     http_client_t *github_client = http_client_new();
 
-    if (api_key != NULL) {
-        char *line = NULL;
+    char *line = NULL;
+    EXIT_IF(asprintf(&line, "Authorization: Bearer %s", api_key) == -1, "asprintf");
 
-        EXIT_IF(asprintf(&line, "Authorization: Bearer %s", api_key) == -1, "asprintf");
-
-        http_client_add_header(github_client, line);
-        free(line);
-    }
+    http_client_add_header(github_client, line);
+    free(line);
 
     http_client_add_header(github_client, "Accept: application/vnd.github+json");
-    http_client_add_header(github_client, "User-Agent: repo-analyzer");
+    http_client_add_header(github_client, "User-Agent: vulnminer");
 
     return github_client;
+}
+
+static long github_get_header_long(http_client_t *client, const char *name) {
+    struct curl_header *header = NULL;
+
+    CURLHcode err = curl_easy_header(client->curl, name, 0, CURLH_HEADER, -1, &header);
+
+    if (err == CURLHE_MISSING || err == CURLHE_NOHEADERS)
+        return -1;
+
+    EXIT_IF(err != CURLHE_OK, "curl_easy_header");
+
+    return strtol(header->value, NULL, 10);
+}
+
+static char *github_get_str(http_client_t *client, const char *url, size_t *response_size) {
+    pthread_mutex_lock(&client->lock);
+    sleep(TIME_BETWEEN_REQUESTS);
+
+    while (true) {
+        http_response_t response = {0};
+        long status = 0;
+
+        CURLcode err = http_get(client, url, &response, &status);
+
+        if (err == CURLE_OPERATION_TIMEDOUT) {
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        EXIT_IF(err != CURLE_OK, curl_easy_strerror(err));
+
+        if (status == 403) {
+            long remaining = github_get_header_long(client, "x-ratelimit-remaining");
+            long reset = github_get_header_long(client, "x-ratelimit-reset");
+
+            EXIT_IF(remaining != 0, "HTTP error %ld with %ld remaining requests", status, remaining);
+            EXIT_IF(reset < 0, "HTTP error %ld with missing x-ratelimit-reset", status);
+
+            time_t now = time(NULL);
+            EXIT_IF(reset < now, "HTTP error %ld with invalid x-ratelimit-reset", status);
+
+            free(response.data);
+            sleep((unsigned)(reset - now));
+            continue;
+        }
+
+        if (status == 404 || status == 409 || status == 422) {
+            pthread_mutex_unlock(&client->lock);
+            free(response.data);
+            return NULL;
+        }
+
+        if (status == 429) {
+            free(response.data);
+            sleep(60);
+            continue;
+        }
+
+        if (status == 500 || status == 503) {
+            free(response.data);
+            sleep(10);
+            continue;
+        }
+
+        EXIT_IF(status < 200 || status >= 300, "HTTP error %ld", status);
+
+        pthread_mutex_unlock(&client->lock);
+
+        *response_size = response.size;
+        return response.data;
+    }
+}
+
+static yyjson_doc *github_get_json(http_client_t *client, const char *url) {
+    size_t response_size = 0;
+    char *response_data = github_get_str(client, url, &response_size);
+
+    if (response_data == NULL)
+        return NULL;
+
+    yyjson_doc *doc = yyjson_read(response_data, response_size, 0);
+    free(response_data);
+    EXIT_IF(doc == NULL, "yyjson_read");
+
+    return doc;
 }
 
 static char *github_get_file(http_client_t *client, const char *repo_name, const char *path, const char *commit_hash, size_t *response_size) {
     char *url = NULL;
     EXIT_IF(asprintf(&url, "https://github.com/%s/raw/%s/%s", repo_name, commit_hash, path) == -1, "asprintf");
 
-    char *content = http_get_str(client, url, response_size);
+    char *content = github_get_str(client, url, response_size);
     free(url);
 
     return content;
@@ -108,11 +197,11 @@ void github_process_commit(void *global_context, void *local_context) {
     char *url = NULL;
     EXIT_IF(asprintf(&url, "https://api.github.com/repos/%s/commits/%s", entry->repo_name, entry->commit_hash) == -1, "asprintf");
 
-    yyjson_doc *doc = http_get_json(github_client, url);
+    yyjson_doc *doc = github_get_json(github_client, url);
     free(url);
 
     if (doc == NULL) {
-        history_update_line(history, history->github_section, line_number, "page not found", true);
+        history_update_line(history, history->github_section, line_number, "commit not found", true);
         dataset_entry_destroy(entry);
         return;
     }

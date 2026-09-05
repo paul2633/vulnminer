@@ -4,7 +4,6 @@
 #include <curl/curl.h>
 #include <pthread.h>
 #include <stddef.h>
-#include <yyjson.h>
 
 typedef struct {
     char *data;
@@ -15,7 +14,7 @@ typedef struct {
     CURL *curl;
     pthread_mutex_t lock;
     struct curl_slist *headers;
-    int delay;
+    unsigned delay;
 } http_client_t;
 
 void http_init(void);
@@ -28,8 +27,8 @@ void http_client_destroy(http_client_t *client);
 
 void http_client_add_header(http_client_t *client, const char *header);
 
-char *http_get_str(http_client_t *client, const char *url, size_t *response_size);
+void http_client_reset(http_client_t *client);
 
-yyjson_doc *http_get_json(http_client_t *client, const char *url);
+CURLcode http_get(http_client_t *client, const char *url, http_response_t *response, long *status);
 
 #endif

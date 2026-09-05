@@ -10,6 +10,8 @@
 #include "nvd_parser.h"
 #include "utils.h"
 
+#define COMMIT_HASH_LEN 40
+
 int nvd_parser_get_total_results(yyjson_doc *doc) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
@@ -85,7 +87,15 @@ static char *extract_commit_hash(const char *url) {
     if (commit == NULL)
         return NULL;
 
-    return strdup(commit + strlen(suffix));
+    char *commit_hash = strdup(commit + strlen(suffix));
+
+    if (commit_hash == NULL)
+        return NULL;
+
+    if (strlen(commit_hash) > COMMIT_HASH_LEN)
+        commit_hash[COMMIT_HASH_LEN] = '\0';
+
+    return commit_hash;
 }
 
 static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, unsigned cwe_id, history_t *history) {

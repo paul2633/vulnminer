@@ -139,6 +139,9 @@ config_t *config_new(int argc, char **argv) {
     EXIT_IF(!S_ISDIR(st.st_mode), "not a directory");
 
     parse_config_file(config, config_path);
+
+    EXIT_IF(config->github_api_key == NULL, "GitHub API key is required");
+
     parse_cwe_ids(config);
     parse_dates(config);
 

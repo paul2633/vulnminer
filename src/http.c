@@ -1,15 +1,12 @@
 #include <curl/curl.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <yyjson.h>
 
 #include "http.h"
 #include "utils.h"
 
-#define HTTP_MAX_DELAY 32
+#define HTTP_MAX_TIMEOUT 30
 
 #define CURL_OK(expr)                                                                                                                                          \
     do {                                                                                                                                                       \
@@ -30,7 +27,7 @@ static void http_client_configure_curl(http_client_t *client) {
     CURL_OK(curl_easy_setopt(client->curl, CURLOPT_WRITEFUNCTION, write_callback));
     CURL_OK(curl_easy_setopt(client->curl, CURLOPT_FOLLOWLOCATION, 1L));
     CURL_OK(curl_easy_setopt(client->curl, CURLOPT_ACCEPT_ENCODING, ""));
-    CURL_OK(curl_easy_setopt(client->curl, CURLOPT_TIMEOUT, HTTP_MAX_DELAY));
+    CURL_OK(curl_easy_setopt(client->curl, CURLOPT_TIMEOUT, HTTP_MAX_TIMEOUT));
 
     if (client->headers != NULL)
         CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HTTPHEADER, client->headers));
@@ -67,7 +64,7 @@ void http_client_add_header(http_client_t *client, const char *header) {
     CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HTTPHEADER, client->headers));
 }
 
-static void http_client_reset(http_client_t *client) {
+void http_client_reset(http_client_t *client) {
     curl_easy_cleanup(client->curl);
 
     client->curl = curl_easy_init();
@@ -76,7 +73,7 @@ static void http_client_reset(http_client_t *client) {
     http_client_configure_curl(client);
 }
 
-static CURLcode http_get(http_client_t *client, const char *url, http_response_t *response, long *status) {
+CURLcode http_get(http_client_t *client, const char *url, http_response_t *response, long *status) {
     FILE *stream = open_memstream(&response->data, &response->size);
     EXIT_IF(stream == NULL, "open_memstream");
 
@@ -91,60 +88,4 @@ static CURLcode http_get(http_client_t *client, const char *url, http_response_t
     EXIT_IF(fclose(stream) == EOF, "fclose");
 
     return err;
-}
-
-char *http_get_str(http_client_t *client, const char *url, size_t *response_size) {
-    pthread_mutex_lock(&client->lock);
-
-    while (true) {
-        sleep(client->delay);
-
-        http_response_t response = {0};
-        long status = 0;
-
-        CURLcode err = http_get(client, url, &response, &status);
-
-        if (err == CURLE_OPERATION_TIMEDOUT) {
-            client->delay = 0;
-            http_client_reset(client);
-            free(response.data);
-            continue;
-        }
-
-        EXIT_IF(err != CURLE_OK, curl_easy_strerror(err));
-
-        if (status == 403 || status == 429 || status >= 500) {
-            client->delay = client->delay == 0 ? 1 : client->delay * 2 > HTTP_MAX_DELAY ? client->delay : client->delay * 2;
-            http_client_reset(client);
-            free(response.data);
-            continue;
-        }
-
-        EXIT_IF(status != 404 && (status < 200 || status >= 300), "HTTP error %ld", status);
-
-        client->delay /= 2;
-        pthread_mutex_unlock(&client->lock);
-
-        if (status == 404) {
-            free(response.data);
-            return NULL;
-        }
-
-        *response_size = response.size;
-        return response.data;
-    }
-}
-
-yyjson_doc *http_get_json(http_client_t *client, const char *url) {
-    size_t response_size = 0;
-    char *response_data = http_get_str(client, url, &response_size);
-
-    if (response_data == NULL)
-        return NULL;
-
-    yyjson_doc *doc = yyjson_read(response_data, response_size, 0);
-    free(response_data);
-    EXIT_IF(doc == NULL, "yyjson_read");
-
-    return doc;
 }

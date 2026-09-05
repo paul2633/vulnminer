@@ -59,9 +59,9 @@ history_t *history_new(void) {
 
     history->previous_lines_count = -1;
 
-    history->nvd_section = section_new("NVD HISTORY");
-    history->github_section = section_new("GITHUB HISTORY");
-    history->parsing_section = section_new("TREE-SITTER HISTORY");
+    history->nvd_section = section_new("NVD CVES DOWNLOAD");
+    history->github_section = section_new("GITHUB COMMITS DOWNLOAD");
+    history->parsing_section = section_new("TREE-SITTER COMMITS PARSING");
 
     EXIT_IF(pthread_mutex_init(&history->lock, NULL) != 0, "pthread_mutex_init");
 

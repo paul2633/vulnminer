@@ -94,7 +94,10 @@ If `cve-published-after` is not specified or invalid, `01/01/1999` is used.
 
 API key used to query the NVD API.
 
-**The key is optional, but using one is strongly recommended (otherwise the download speed from the NVD API will be very limited).**
+Optional, but strongly recommended for large downloads.
+
+To obtain a key, visit the [NVD API key request page](https://nvd.nist.gov/developers/request-an-api-key) and follow the instructions to request one.
+
 
 ### GitHub API key
 
@@ -102,7 +105,9 @@ API key used to query the NVD API.
 
 GitHub personal access token used to query the GitHub API.
 
-**The key is optional, but using one is strongly recommended (otherwise the download speed from the GitHub API will be very limited).**
+**Required.** VulnMiner requires authentication to avoid GitHub's very restrictive unauthenticated API rate limit.
+
+To create a token, visit [GitHub Settings → Developer settings → Personal access tokens](https://github.com/settings/personal-access-tokens) and create a fine-grained personal access token.
 
 ### Source file types
 
