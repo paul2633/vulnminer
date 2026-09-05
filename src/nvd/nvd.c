@@ -1,11 +1,11 @@
+#include <curl/curl.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 #include <yyjson.h>
-#include <curl/curl.h>
-#include <pthread.h>
 
 #include "config.h"
 #include "history.h"

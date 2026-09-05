@@ -4,18 +4,33 @@
 #include "dataset.h"
 #include "utils.h"
 
-dataset_file_t *dataset_file_new(const char *path) {
+dataset_file_t *dataset_file_new(const char *path, const char *previous_path, const char *status) {
     dataset_file_t *file = calloc(1, sizeof(*file));
     EXIT_IF(file == NULL, "calloc");
 
-    file->path = strdup(path);
-    EXIT_IF(file->path == NULL, "strdup");
+    if (path != NULL) {
+        file->path = strdup(path);
+        EXIT_IF(file->path == NULL, "strdup");
+    }
+
+    if (previous_path != NULL) {
+        file->previous_path = strdup(previous_path);
+        EXIT_IF(file->previous_path == NULL, "strdup");
+    }
+
+    file->status = strdup(status);
+    EXIT_IF(file->status == NULL, "strdup");
 
     return file;
 }
 
 static void dataset_file_destroy(dataset_file_t *file) {
+    if (file == NULL)
+        return;
+
     free(file->path);
+    free(file->previous_path);
+    free(file->status);
     free(file->before);
     free(file->after);
     free(file);

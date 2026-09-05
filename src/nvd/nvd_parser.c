@@ -12,6 +12,9 @@
 
 #define COMMIT_HASH_LEN 40
 
+#define REPO_NAME_INDEX 0
+#define COMMIT_HASH_INDEX 1
+
 int nvd_parser_get_total_results(yyjson_doc *doc) {
     yyjson_val *root = yyjson_doc_get_root(doc);
     EXIT_IF(root == NULL, "yyjson_doc_get_root");
@@ -98,12 +101,31 @@ static char *extract_commit_hash(const char *url) {
     return commit_hash;
 }
 
+static bool check_is_duplicate(char *pushed_repos_infos[][2], size_t pushed_repos_count, const char *repo_name, const char *commit_hash) {
+    for (size_t i = 0; i < pushed_repos_count; i++) {
+        if (strcmp(repo_name, pushed_repos_infos[i][REPO_NAME_INDEX]) == 0 && strcmp(commit_hash, pushed_repos_infos[i][COMMIT_HASH_INDEX]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, unsigned cwe_id, history_t *history) {
     yyjson_val *refs = yyjson_obj_get(cve, "references");
     if (refs == NULL || !yyjson_is_arr(refs))
         return;
 
     char *cve_description = nvd_parser_get_description(cve);
+    size_t refs_count = yyjson_arr_size(refs);
+
+    if (refs_count == 0) {
+        free(cve_description);
+        return;
+    }
+
+    char *pushed_repos_infos[refs_count][2];
+    size_t pushed_repos_count = 0;
 
     yyjson_val *ref;
     size_t i, max;
@@ -121,22 +143,28 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
         char *repo_name = extract_repo_path(url_str);
         char *commit_hash = extract_commit_hash(url_str);
 
-        if (repo_name == NULL || commit_hash == NULL) {
+        if (repo_name == NULL || commit_hash == NULL || check_is_duplicate(pushed_repos_infos, pushed_repos_count, repo_name, commit_hash)) {
             free(repo_name);
             free(commit_hash);
             continue;
         }
+
+        pushed_repos_infos[pushed_repos_count][REPO_NAME_INDEX] = repo_name;
+        pushed_repos_infos[pushed_repos_count][COMMIT_HASH_INDEX] = commit_hash;
+        pushed_repos_count++;
 
         const char *cve_id = yyjson_get_str(yyjson_obj_get(cve, "id"));
         EXIT_IF(cve_id == NULL, "id");
 
         dataset_entry_t *entry = dataset_entry_new(cwe_id, cve_id, repo_name, commit_hash, cve_description);
 
-        free(repo_name);
-        free(commit_hash);
-
         history_increment_pending(history, history->github_section);
         push_new_job(github_queue, entry);
+    }
+
+    for (i = 0; i < pushed_repos_count; i++) {
+        free(pushed_repos_infos[i][REPO_NAME_INDEX]);
+        free(pushed_repos_infos[i][COMMIT_HASH_INDEX]);
     }
 
     free(cve_description);

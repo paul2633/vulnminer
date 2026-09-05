@@ -37,6 +37,7 @@ void parser_export_commit(void *global_context, void *local_context) {
     if (fd == -1 && errno == EEXIST) {
         history_update_line(history, history->parsing_section, line_number, "file already exists", true);
         dataset_entry_destroy(entry);
+        EXIT_IF(true, "file already exists");
         return;
     }
 
@@ -61,41 +62,21 @@ void parser_export_commit(void *global_context, void *local_context) {
     yyjson_mut_obj_add_str(doc, root, "commit_hash", entry->commit_hash);
     yyjson_mut_obj_add_str(doc, root, "commit_message", entry->commit_message);
 
-    yyjson_mut_val *included_files = yyjson_mut_arr(doc);
-    yyjson_mut_val *excluded_files = yyjson_mut_arr(doc);
+    yyjson_mut_val *files = yyjson_mut_arr(doc);
 
     for (unsigned i = 0; i < entry->files_count; i++) {
         yyjson_mut_val *file = yyjson_mut_obj(doc);
-        yyjson_mut_obj_add_str(doc, file, "path", entry->files[i]->path);
 
-        switch (entry->files[i]->state) {
-            case ONGOING: {
-                yyjson_mut_val *modified_functions = yyjson_mut_arr(doc);
-                yyjson_mut_obj_add_val(doc, file, "modified_functions", modified_functions);
-                yyjson_mut_arr_add_val(included_files, file);
-                break;
-            }
-            case FILE_NOT_MODIFIED:
-                yyjson_mut_obj_add_str(doc, file, "reason", "not_modified");
-                yyjson_mut_arr_add_val(excluded_files, file);
-                break;
-            case EXTENSION_NOT_SUPPORTED:
-                yyjson_mut_obj_add_str(doc, file, "reason", "unsupported_extension");
-                yyjson_mut_arr_add_val(excluded_files, file);
-                break;
-            case FILE_CONTENT_UNAVAILABLE:
-                yyjson_mut_obj_add_str(doc, file, "reason", "content_unavailable");
-                yyjson_mut_arr_add_val(excluded_files, file);
-                break;
-            case NO_MODIFIED_FUNCTION:
-                yyjson_mut_obj_add_str(doc, file, "reason", "no_modified_function");
-                yyjson_mut_arr_add_val(excluded_files, file);
-                break;
-        }
+        yyjson_mut_obj_add_str(doc, file, "current_commit_path", entry->files[i]->path);
+        yyjson_mut_obj_add_str(doc, file, "previous_commit_path", entry->files[i]->previous_path);
+        yyjson_mut_obj_add_str(doc, file, "status", entry->files[i]->status);
+        yyjson_mut_obj_add_str(doc, file, "before", entry->files[i]->before);
+        yyjson_mut_obj_add_str(doc, file, "after", entry->files[i]->after);
+
+        yyjson_mut_arr_add_val(files, file);
     }
 
-    yyjson_mut_obj_add_val(doc, root, "included_files", included_files);
-    yyjson_mut_obj_add_val(doc, root, "excluded_files", excluded_files);
+    yyjson_mut_obj_add_val(doc, root, "included_files", files);
 
     size_t len;
     const char *json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY, &len);

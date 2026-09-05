@@ -3,17 +3,10 @@
 
 #include <stddef.h>
 
-typedef enum {
-    ONGOING = 0,
-    FILE_NOT_MODIFIED,
-    EXTENSION_NOT_SUPPORTED,
-    FILE_CONTENT_UNAVAILABLE,
-    NO_MODIFIED_FUNCTION,
-} file_state_t;
-
 typedef struct {
     char *path;
-    file_state_t state;
+    char *previous_path;
+    char *status;
 
     char *before;
     size_t before_size;
@@ -37,7 +30,7 @@ typedef struct {
     unsigned files_count;
 } dataset_entry_t;
 
-dataset_file_t *dataset_file_new(const char *path);
+dataset_file_t *dataset_file_new(const char *path, const char *previous_path, const char *status);
 
 dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash, const char *cve_description);
 

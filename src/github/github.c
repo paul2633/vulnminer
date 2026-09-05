@@ -1,11 +1,11 @@
+#include <curl/curl.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 #include <yyjson.h>
-#include <curl/curl.h>
-#include <pthread.h>
 
 #include "dataset.h"
 #include "github.h"
@@ -138,46 +138,39 @@ char *commit_to_display(unsigned cwe_id, const char *cve_id, const char *repo_na
     return prefix;
 }
 
-static unsigned github_process_files(http_client_t *github_client, history_t *history, dataset_entry_t *entry, unsigned line_number,
-                                     unsigned files_to_download) {
-    unsigned downloaded_files = 0, current_file = 0;
-
-    for (size_t i = 0; i < entry->files_count; i++) {
+static bool github_process_files(http_client_t *github_client, history_t *history, dataset_entry_t *entry, unsigned line_number) {
+    for (unsigned i = 0; i < entry->files_count; i++) {
         dataset_file_t *file = entry->files[i];
-        if (file->state != ONGOING)
-            continue;
 
         char *suffix = NULL;
-        EXIT_IF(asprintf(&suffix, "fetching file %u/%u...", ++current_file, files_to_download) == -1, "asprintf");
+        EXIT_IF(asprintf(&suffix, "fetching file %u/%u...", i + 1, entry->files_count) == -1, "asprintf");
         history_update_line(history, history->github_section, line_number, suffix, false);
         free(suffix);
 
-        size_t before_size = 0;
-        char *before = github_get_file(github_client, entry->repo_name, file->path, entry->parent_commit_hash, &before_size);
+        if (file->previous_path != NULL) {
+            size_t before_size = 0;
+            char *before = github_get_file(github_client, entry->repo_name, file->previous_path, entry->parent_commit_hash, &before_size);
 
-        if (before == NULL) {
-            file->state = FILE_CONTENT_UNAVAILABLE;
-            continue;
+            if (before == NULL)
+                return false;
+
+            file->before = before;
+            file->before_size = before_size;
         }
 
-        size_t after_size = 0;
-        char *after = github_get_file(github_client, entry->repo_name, file->path, entry->commit_hash, &after_size);
+        if (file->path != NULL) {
+            size_t after_size = 0;
+            char *after = github_get_file(github_client, entry->repo_name, file->path, entry->commit_hash, &after_size);
 
-        if (after == NULL) {
-            free(before);
-            file->state = FILE_CONTENT_UNAVAILABLE;
-            continue;
+            if (after == NULL)
+                return false;
+
+            file->after = after;
+            file->after_size = after_size;
         }
-
-        file->before = before;
-        file->before_size = before_size;
-        file->after = after;
-        file->after_size = after_size;
-
-        downloaded_files++;
     }
 
-    return downloaded_files;
+    return true;
 }
 
 void github_process_commit(void *global_context, void *local_context) {
@@ -206,17 +199,24 @@ void github_process_commit(void *global_context, void *local_context) {
         return;
     }
 
-    unsigned files_to_download = github_parser_parse_commit(config, entry, doc);
-    yyjson_doc_free(doc);
-
-    if (entry->parent_commit_hash == NULL) {
+    if (!github_parser_parse_infos(entry, doc)) {
         history_update_line(history, history->github_section, line_number, "parent commit not found", true);
+        yyjson_doc_free(doc);
         dataset_entry_destroy(entry);
         return;
     }
 
-    if (github_process_files(github_client, history, entry, line_number, files_to_download) == 0) {
-        history_update_line(history, history->github_section, line_number, "no valid file found", true);
+    if (!github_parser_parse_files(config, entry, doc)) {
+        history_update_line(history, history->github_section, line_number, "unsupported extension found", true);
+        yyjson_doc_free(doc);
+        dataset_entry_destroy(entry);
+        return;
+    }
+
+    yyjson_doc_free(doc);
+
+    if (!github_process_files(github_client, history, entry, line_number)) {
+        history_update_line(history, history->github_section, line_number, "file content unavailable", true);
         dataset_entry_destroy(entry);
         return;
     }
