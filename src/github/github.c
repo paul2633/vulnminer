@@ -120,11 +120,32 @@ static yyjson_doc *github_get_json(http_client_t *client, const char *url) {
 }
 
 static char *github_get_file(http_client_t *client, const char *repo_name, const char *path, const char *commit_hash, size_t *response_size) {
-    char *url = NULL;
-    EXIT_IF(asprintf(&url, "https://github.com/%s/raw/%s/%s", repo_name, commit_hash, path) == -1, "asprintf");
+    CURLU *url = curl_url();
+    EXIT_IF(url == NULL, "curl_url");
 
-    char *content = github_get_str(client, url, response_size);
-    free(url);
+    CURLUcode err;
+
+    err = curl_url_set(url, CURLUPART_SCHEME, "https", 0);
+    EXIT_IF(err != CURLUE_OK, "curl_url_set");
+
+    err = curl_url_set(url, CURLUPART_HOST, "github.com", 0);
+    EXIT_IF(err != CURLUE_OK, "curl_url_set");
+
+    char *url_path = NULL;
+    EXIT_IF(asprintf(&url_path, "/%s/raw/%s/%s", repo_name, commit_hash, path) == -1, "asprintf");
+
+    err = curl_url_set(url, CURLUPART_PATH, url_path, CURLU_URLENCODE);
+    free(url_path);
+    EXIT_IF(err != CURLUE_OK, "curl_url_set");
+
+    char *url_str = NULL;
+    err = curl_url_get(url, CURLUPART_URL, &url_str, 0);
+    EXIT_IF(err != CURLUE_OK, "curl_url_get");
+
+    char *content = github_get_str(client, url_str, response_size);
+
+    curl_free(url_str);
+    curl_url_cleanup(url);
 
     return content;
 }

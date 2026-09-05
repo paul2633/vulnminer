@@ -18,8 +18,10 @@ dataset_file_t *dataset_file_new(const char *path, const char *previous_path, co
         EXIT_IF(file->previous_path == NULL, "strdup");
     }
 
-    file->status = strdup(status);
-    EXIT_IF(file->status == NULL, "strdup");
+    if (status != NULL) {
+        file->status = strdup(status);
+        EXIT_IF(file->status == NULL, "strdup");
+    }
 
     return file;
 }
@@ -42,17 +44,25 @@ dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const ch
 
     entry->cwe_id = cwe_id;
 
-    entry->cve_id = strdup(cve_id);
-    EXIT_IF(entry->cve_id == NULL, "strdup");
+    if (cve_id != NULL) {
+        entry->cve_id = strdup(cve_id);
+        EXIT_IF(entry->cve_id == NULL, "strdup");
+    }
 
-    entry->repo_name = strdup(repo_name);
-    EXIT_IF(entry->repo_name == NULL, "strdup");
+    if (repo_name != NULL) {
+        entry->repo_name = strdup(repo_name);
+        EXIT_IF(entry->repo_name == NULL, "strdup");
+    }
 
-    entry->commit_hash = strdup(commit_hash);
-    EXIT_IF(entry->commit_hash == NULL, "strdup");
+    if (commit_hash != NULL) {
+        entry->commit_hash = strdup(commit_hash);
+        EXIT_IF(entry->commit_hash == NULL, "strdup");
+    }
 
-    entry->cve_description = strdup(cve_description);
-    EXIT_IF(entry->cve_description == NULL, "strdup");
+    if (cve_description != NULL) {
+        entry->cve_description = strdup(cve_description);
+        EXIT_IF(entry->cve_description == NULL, "strdup");
+    }
 
     return entry;
 }

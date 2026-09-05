@@ -37,7 +37,6 @@ void parser_export_commit(void *global_context, void *local_context) {
     if (fd == -1 && errno == EEXIST) {
         history_update_line(history, history->parsing_section, line_number, "file already exists", true);
         dataset_entry_destroy(entry);
-        EXIT_IF(true, "file already exists");
         return;
     }
 
