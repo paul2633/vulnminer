@@ -156,7 +156,10 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
         const char *cve_id = yyjson_get_str(yyjson_obj_get(cve, "id"));
         EXIT_IF(cve_id == NULL, "id");
 
-        dataset_entry_t *entry = dataset_entry_new(cwe_id, cve_id, repo_name, commit_hash, cve_description);
+        const char *published = yyjson_get_str(yyjson_obj_get(cve, "published"));
+        EXIT_IF(published == NULL, "published");
+
+        dataset_entry_t *entry = dataset_entry_new(cwe_id, cve_id, repo_name, commit_hash, cve_description, published);
 
         history_increment_pending(history, history->github_section);
         push_new_job(github_queue, entry);

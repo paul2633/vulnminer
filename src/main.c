@@ -12,7 +12,7 @@
 #include "utils.h"
 
 #define GITHUB_THREADS 1
-#define PARSING_THREADS 1
+#define PARSING_THREADS 2
 
 int main(int argc, char **argv) {
 
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 
     parser_global_context_t parser_global_context = {config, history};
 
-    jobs_queue_t *parsing_queue = jobs_queue_new(parser_export_commit, &parser_global_context);
+    jobs_queue_t *parsing_queue = jobs_queue_new(parse_and_export_commit, &parser_global_context);
 
     pthread_t parsing_threads[PARSING_THREADS];
     for (int i = 0; i < PARSING_THREADS; i++)

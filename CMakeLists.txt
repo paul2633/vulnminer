@@ -26,12 +26,15 @@ file(GLOB_RECURSE SRC CONFIGURE_DEPENDS
 add_library(tree_sitter STATIC
     third_party/tree-sitter/src/lib.c
     third_party/tree-sitter-c/src/parser.c
+    third_party/tree-sitter-cpp/src/parser.c
+    third_party/tree-sitter-cpp/src/scanner.c
 )
 
 target_include_directories(tree_sitter SYSTEM PUBLIC
     third_party/tree-sitter/include
     third_party/tree-sitter/src
     third_party/tree-sitter-c/src
+    third_party/tree-sitter-cpp/src
 )
 
 add_subdirectory(third_party/yyjson)

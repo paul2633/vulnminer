@@ -76,7 +76,10 @@ static dataset_file_t *parse_file(const config_t *config, yyjson_val *file) {
 
         previous_path_str = yyjson_get_str(previous_path);
 
-        if (!extension_is_supported(config, previous_path_str))
+        const char *old_ext = strrchr(previous_path_str, '.');
+        const char *new_ext = strrchr(path_str, '.');
+
+        if (old_ext == NULL || new_ext == NULL || strcmp(old_ext, new_ext) != 0)
             return NULL;
     }
 
@@ -96,12 +99,12 @@ bool github_parser_parse_files(const config_t *config, dataset_entry_t *entry, y
     yyjson_val *files = yyjson_obj_get(root, "files");
     EXIT_IF(files == NULL || !yyjson_is_arr(files), "files");
 
-    unsigned files_count = yyjson_arr_size(files);
+    entry->files_count = yyjson_arr_size(files);
+    if (entry->files_count == 0)
+        return false;
 
-    entry->files = calloc(files_count, sizeof(*entry->files));
-    EXIT_IF(entry->files == NULL && files_count != 0, "calloc");
-
-    entry->files_count = files_count;
+    entry->files = calloc(entry->files_count, sizeof(*entry->files));
+    EXIT_IF(entry->files == NULL && entry->files_count != 0, "calloc");
 
     yyjson_val *file;
     size_t i, max;
