@@ -118,28 +118,28 @@ static unsigned context_distance(const char *path1, const char *path2) {
 }
 
 static bool is_already_in_commit(const dataset_entry_t *entry, const char *path) {
-    for (unsigned i = 0; i < entry->files_count; i++) {
+    for (unsigned i = 0; i < entry->files_count; i++)
         if (entry->files[i]->path != NULL && strcmp(path, entry->files[i]->path) == 0)
             return true;
-        if (entry->files[i]->previous_path != NULL && strcmp(path, entry->files[i]->previous_path) == 0)
-            return true;
-    }
 
     return false;
 }
 
-static bool is_context_file(const dataset_entry_t *entry, const char *path, unsigned context_depth) {
-    if (is_already_in_commit(entry, path))
-        return false;
+static void github_add_context_file(dataset_entry_t *entry, const char *path, unsigned context_depth) {
+    dataset_context_file_t *context_file = NULL;
 
     for (unsigned i = 0; i < entry->files_count; i++) {
-        if (entry->files[i]->path != NULL && context_distance(entry->files[i]->path, path) < context_depth)
-            return true;
-        if (entry->files[i]->previous_path != NULL && context_distance(entry->files[i]->previous_path, path) < context_depth)
-            return true;
-    }
+        if (entry->files[i]->path == NULL)
+            continue;
 
-    return false;
+        unsigned distance = context_distance(entry->files[i]->path, path);
+
+        if (distance < context_depth) {
+            if (context_file == NULL)
+                context_file = add_and_get_new_context_file(entry, path);
+            add_new_context_distance(context_file, entry->files[i]->path, distance);
+        }
+    }
 }
 
 void github_parse_context_files(dataset_entry_t *entry, yyjson_doc *doc, unsigned context_depth) {
@@ -162,9 +162,9 @@ void github_parse_context_files(dataset_entry_t *entry, yyjson_doc *doc, unsigne
         if (strcmp(type, "blob") != 0)
             continue;
 
-        if (!is_context_file(entry, path, context_depth))
+        if (is_already_in_commit(entry, path))
             continue;
 
-        add_new_context_file(entry, path);
+        github_add_context_file(entry, path, context_depth);
     }
 }

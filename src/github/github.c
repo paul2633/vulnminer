@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <yyjson.h>
 
 #include "dataset.h"
@@ -169,7 +170,7 @@ void github_process_commit(void *global_context, void *local_context) {
         return;
     }
 
-    if (entry->files_count > config->max_files_commit) {
+    if (entry->files_count > config->max_files_commit || entry->files_count > config->max_files_total) {
         history_update_line(history, history->github_section, line_number, "commit rejected: too many files affected by commit", true);
         dataset_entry_destroy(entry);
         return;
@@ -193,7 +194,7 @@ void github_process_commit(void *global_context, void *local_context) {
         yyjson_doc_free(doc);
     }
 
-    if (entry->context_files_count > config->max_files_context) {
+    if (entry->context_files_count > config->max_files_context || entry->context_files_count > config->max_files_total) {
         history_update_line(history, history->github_section, line_number, "commit rejected: too many files in context", true);
         dataset_entry_destroy(entry);
         return;
@@ -213,6 +214,5 @@ void github_process_commit(void *global_context, void *local_context) {
 
     history_update_line(history, history->github_section, line_number, "commit accepted", true);
     history_increment_pending(history, history->parsing_section);
-    // push_new_job(parsing_queue, entry);
-    dataset_entry_destroy(entry);
+    push_new_job(parsing_queue, entry);
 }

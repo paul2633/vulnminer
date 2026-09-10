@@ -96,6 +96,41 @@ static void generate_json_files(yyjson_mut_doc *doc, yyjson_mut_val *root, datas
     yyjson_mut_obj_add_val(doc, root, "commit_files", files);
 }
 
+static void generate_json_context_distances(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_context_file, dataset_context_file_t *dataset_context_file) {
+    yyjson_mut_val *context_distances = yyjson_mut_arr(doc);
+
+    for (unsigned i = 0; i < dataset_context_file->distances_count; i++) {
+        yyjson_mut_val *context_distance = yyjson_mut_obj(doc);
+
+        yyjson_mut_obj_add_str(doc, context_distance, "path", dataset_context_file->distances[i]->path);
+        yyjson_mut_obj_add_uint(doc, context_distance, "distance", dataset_context_file->distances[i]->distance);
+
+        yyjson_mut_arr_add_val(context_distances, context_distance);
+    }
+
+    yyjson_mut_obj_add_val(doc, yyjson_context_file, "distances", context_distances);
+}
+
+static void generate_json_context_file(yyjson_mut_doc *doc, yyjson_mut_val *context_files, dataset_context_file_t *dataset_context_file) {
+    yyjson_mut_val *yyjson_context_file = yyjson_mut_obj(doc);
+
+    yyjson_mut_obj_add_str(doc, yyjson_context_file, "path", dataset_context_file->path);
+    yyjson_mut_obj_add_str(doc, yyjson_context_file, "content", dataset_context_file->content);
+
+    generate_json_context_distances(doc, yyjson_context_file, dataset_context_file);
+
+    yyjson_mut_arr_add_val(context_files, yyjson_context_file);
+}
+
+static void generate_json_context_files(yyjson_mut_doc *doc, yyjson_mut_val *root, dataset_entry_t *entry) {
+    yyjson_mut_val *context_files = yyjson_mut_arr(doc);
+
+    for (unsigned i = 0; i < entry->context_files_count; i++)
+        generate_json_context_file(doc, context_files, entry->context_files[i]);
+
+    yyjson_mut_obj_add_val(doc, root, "context_files", context_files);
+}
+
 static char *generate_json(dataset_entry_t *entry, size_t *len) {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     EXIT_IF(doc == NULL, "yyjson_mut_doc_new");
@@ -107,6 +142,7 @@ static char *generate_json(dataset_entry_t *entry, size_t *len) {
 
     generate_json_header(doc, root, entry);
     generate_json_files(doc, root, entry);
+    generate_json_context_files(doc, root, entry);
 
     yyjson_write_err err = {0};
     char *json = yyjson_mut_write_opts(doc, YYJSON_WRITE_PRETTY | YYJSON_WRITE_ALLOW_INVALID_UNICODE, NULL, len, &err);
@@ -143,18 +179,17 @@ void parse_and_export_commit(void *global_context, void *local_context) {
                 -1,
             "asprintf");
 
+    // parser_parse_commit(entry);
+
     int fd = open(output_path, O_WRONLY | O_CREAT | O_EXCL, 0644);
     free(output_path);
 
     if (fd == -1 && errno == EEXIST) {
+        EXIT_IF(errno != EEXIST, "open");
         dataset_entry_destroy(entry);
         history_update_line(history, history->parsing_section, line_number, "filename already exists", true);
         return;
     }
-
-    EXIT_IF(fd == -1, "open");
-
-    parser_parse_commit(entry);
 
     size_t len = 0;
     char *json = generate_json(entry, &len);
@@ -163,4 +198,5 @@ void parse_and_export_commit(void *global_context, void *local_context) {
     free(json);
 
     dataset_entry_destroy(entry);
+    history_update_line(history, history->parsing_section, line_number, "complete", true);
 }

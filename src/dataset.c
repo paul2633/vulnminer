@@ -84,7 +84,25 @@ static void dataset_file_destroy(dataset_file_t *file) {
     free(file);
 }
 
-void add_new_context_file(dataset_entry_t *entry, const char *path) {
+void add_new_context_distance(dataset_context_file_t *context_file, const char *path, unsigned distance) {
+    context_file->distances = realloc(context_file->distances, (context_file->distances_count + 1) * sizeof(*context_file->distances));
+    EXIT_IF(context_file->distances == NULL, "realloc");
+
+    dataset_context_distance_t *context_distance = calloc(1, sizeof(*context_distance));
+    EXIT_IF(context_distance == NULL, "calloc");
+
+    set_string(&context_distance->path, path);
+    context_distance->distance = distance;
+
+    context_file->distances[context_file->distances_count++] = context_distance;
+}
+
+static void dataset_context_distance_destroy(dataset_context_distance_t *context_distance) {
+    free(context_distance->path);
+    free(context_distance);
+}
+
+dataset_context_file_t *add_and_get_new_context_file(dataset_entry_t *entry, const char *path) {
     entry->context_files = realloc(entry->context_files, (entry->context_files_count + 1) * sizeof(*entry->context_files));
     EXIT_IF(entry->context_files == NULL, "realloc");
 
@@ -93,11 +111,18 @@ void add_new_context_file(dataset_entry_t *entry, const char *path) {
 
     set_string(&context_file->path, path);
     entry->context_files[entry->context_files_count++] = context_file;
+
+    return context_file;
 }
 
 static void dataset_context_file_destroy(dataset_context_file_t *context_file) {
     free(context_file->path);
     free(context_file->content);
+
+    for (unsigned i = 0; i < context_file->distances_count; i++)
+        dataset_context_distance_destroy(context_file->distances[i]);
+    free(context_file->distances);
+
     free(context_file);
 }
 
