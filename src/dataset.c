@@ -9,7 +9,8 @@ static void set_string(char **dst, const char *new) {
     EXIT_IF(*dst == NULL, "strdup");
 }
 
-static dataset_function_t *dataset_function_new(const char *function_name, const char *file_content, uint32_t function_start, uint32_t function_end) {
+static dataset_function_t *dataset_function_new(const char *function_name, unsigned parameters_count, const char *file_content, uint32_t function_start,
+                                                uint32_t function_end) {
     dataset_function_t *function = calloc(1, sizeof(*function));
     EXIT_IF(function == NULL, "calloc");
 
@@ -21,30 +22,26 @@ static dataset_function_t *dataset_function_new(const char *function_name, const
 
     memcpy(function->content, file_content + function_start, size);
     function->content[size] = '\0';
+
+    function->parameters_count = parameters_count;
     return function;
 }
 
-void add_before_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end) {
+void add_before_function(dataset_file_t *file, const char *function_name, unsigned parameters_count, uint32_t function_start, uint32_t function_end) {
     file->before_functions = realloc(file->before_functions, (file->before_functions_count + 1) * sizeof(*file->before_functions));
     EXIT_IF(file->before_functions == NULL, "realloc");
-    file->before_functions[file->before_functions_count++] = dataset_function_new(function_name, file->before, function_start, function_end);
+    file->before_functions[file->before_functions_count++] = dataset_function_new(function_name, parameters_count, file->before, function_start, function_end);
 }
 
-void add_after_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end) {
+void add_after_function(dataset_file_t *file, const char *function_name, unsigned parameters_count, uint32_t function_start, uint32_t function_end) {
     file->after_functions = realloc(file->after_functions, (file->after_functions_count + 1) * sizeof(*file->after_functions));
     EXIT_IF(file->after_functions == NULL, "realloc");
-    file->after_functions[file->after_functions_count++] = dataset_function_new(function_name, file->after, function_start, function_end);
+    file->after_functions[file->after_functions_count++] = dataset_function_new(function_name, parameters_count, file->after, function_start, function_end);
 }
 
 static void dataset_function_destroy(dataset_function_t *function) {
     free(function->name);
     free(function->content);
-    free(function->function_type);
-
-    for (unsigned i = 0; i < function->parameters_count; i++)
-        free(function->parameters_types[i]);
-    free(function->parameters_types);
-
     free(function);
 }
 

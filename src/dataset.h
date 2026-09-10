@@ -7,9 +7,6 @@
 typedef struct {
     char *name;
     char *content;
-
-    char *function_type;
-    char **parameters_types;
     unsigned parameters_count;
 } dataset_function_t;
 
@@ -64,9 +61,9 @@ typedef struct {
     unsigned context_files_count;
 } dataset_entry_t;
 
-void add_before_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end);
+void add_before_function(dataset_file_t *file, const char *function_name, unsigned parameters_count, uint32_t function_start, uint32_t function_end);
 
-void add_after_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end);
+void add_after_function(dataset_file_t *file, const char *function_name, unsigned parameters_count, uint32_t function_start, uint32_t function_end);
 
 void add_new_file(dataset_entry_t *entry, const char *path, const char *previous_path, const char *status);
 

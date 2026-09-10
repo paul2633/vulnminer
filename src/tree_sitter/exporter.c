@@ -24,114 +24,115 @@ static void generate_json_header(yyjson_mut_doc *doc, yyjson_mut_val *root, data
     yyjson_mut_obj_add_str(doc, root, "commit_message", entry->commit_message);
 }
 
-static dataset_function_t *find_function(dataset_function_t **functions, unsigned functions_count, const char *name) {
-    if (name == NULL)
-        return NULL;
+static dataset_function_t *find_function_match(const dataset_function_t *function, dataset_function_t **functions_arr, unsigned functions_count) {
+    for (unsigned i = 0; i < functions_count; i++) {
+        if (strcmp(function->name, functions_arr[i]->name) != 0)
+            continue;
 
-    for (unsigned i = 0; i < functions_count; i++)
-        if (strcmp(functions[i]->name, name) == 0)
-            return functions[i];
+        if (function->parameters_count != functions_arr[i]->parameters_count)
+            continue;
+
+        return functions_arr[i];
+    }
 
     return NULL;
 }
 
-static void generate_json_function(yyjson_mut_doc *doc, yyjson_mut_val *functions, const char *name, const char *status, const char *previous_content,
-                                   const char *content) {
-    yyjson_mut_val *function = yyjson_mut_obj(doc);
+static void generate_json_function(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_functions, const char *name, unsigned parameters_count, const char *status,
+                                   const char *previous_content, const char *content) {
+    yyjson_mut_val *yyjson_function = yyjson_mut_obj(doc);
 
-    yyjson_mut_obj_add_str(doc, function, "name", name);
-    yyjson_mut_obj_add_str(doc, function, "status", status);
+    yyjson_mut_obj_add_str(doc, yyjson_function, "name", name);
+    yyjson_mut_obj_add_uint(doc, yyjson_function, "parameters_number", parameters_count);
+    yyjson_mut_obj_add_str(doc, yyjson_function, "status", status);
 
-    yyjson_mut_obj_add_str(doc, function, "content", content);
-    yyjson_mut_obj_add_str(doc, function, "previous_content", previous_content);
+    yyjson_mut_obj_add_str(doc, yyjson_function, "content", content);
+    yyjson_mut_obj_add_str(doc, yyjson_function, "previous_content", previous_content);
 
-    yyjson_mut_arr_add_val(functions, function);
+    yyjson_mut_arr_add_val(yyjson_functions, yyjson_function);
 }
 
-static void generate_json_functions(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_file, dataset_file_t *dataset_file) {
-    yyjson_mut_val *functions = yyjson_mut_arr(doc);
+static void generate_json_functions(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_file, dataset_file_t *file) {
+    yyjson_mut_val *yyjson_functions = yyjson_mut_arr(doc);
 
-    for (unsigned i = 0; i < dataset_file->before_functions_count; i++) {
-        const dataset_function_t *before = dataset_file->before_functions[i];
-        const dataset_function_t *after = find_function(dataset_file->after_functions, dataset_file->after_functions_count, before->name);
+    for (unsigned i = 0; i < file->before_functions_count; i++) {
+        const dataset_function_t *before = file->before_functions[i];
+        const dataset_function_t *after = find_function_match(before, file->after_functions, file->after_functions_count);
 
         if (after == NULL)
-            generate_json_function(doc, functions, before->name, "removed", before->content, NULL);
+            generate_json_function(doc, yyjson_functions, before->name, before->parameters_count, "removed", before->content, NULL);
         else if (strcmp(before->content, after->content) != 0)
-            generate_json_function(doc, functions, before->name, "modified", before->content, after->content);
+            generate_json_function(doc, yyjson_functions, before->name, before->parameters_count, "modified", before->content, after->content);
     }
 
-    for (unsigned i = 0; i < dataset_file->after_functions_count; i++) {
-        const dataset_function_t *after = dataset_file->after_functions[i];
+    for (unsigned i = 0; i < file->after_functions_count; i++) {
+        const dataset_function_t *after = file->after_functions[i];
 
-        if (find_function(dataset_file->before_functions, dataset_file->before_functions_count, after->name) == NULL)
-            generate_json_function(doc, functions, after->name, "added", NULL, after->content);
+        if (find_function_match(after, file->before_functions, file->before_functions_count) == NULL)
+            generate_json_function(doc, yyjson_functions, after->name, after->parameters_count, "added", NULL, after->content);
     }
 
-    yyjson_mut_obj_add_val(doc, yyjson_file, "affected_functions", functions);
-}
-
-static void generate_json_file(yyjson_mut_doc *doc, yyjson_mut_val *files, dataset_file_t *dataset_file) {
-    yyjson_mut_val *yyjson_file = yyjson_mut_obj(doc);
-
-    yyjson_mut_obj_add_str(doc, yyjson_file, "status", dataset_file->status);
-
-    yyjson_mut_obj_add_str(doc, yyjson_file, "path", dataset_file->path);
-    yyjson_mut_obj_add_str(doc, yyjson_file, "previous_path", dataset_file->previous_path);
-
-    yyjson_mut_obj_add_str(doc, yyjson_file, "content", dataset_file->after);
-    yyjson_mut_obj_add_str(doc, yyjson_file, "previous_content", dataset_file->before);
-
-    generate_json_functions(doc, yyjson_file, dataset_file);
-
-    yyjson_mut_arr_add_val(files, yyjson_file);
+    yyjson_mut_obj_add_val(doc, yyjson_file, "affected_functions", yyjson_functions);
 }
 
 static void generate_json_files(yyjson_mut_doc *doc, yyjson_mut_val *root, dataset_entry_t *entry) {
-    yyjson_mut_val *files = yyjson_mut_arr(doc);
+    yyjson_mut_val *yyjson_files = yyjson_mut_arr(doc);
 
-    for (unsigned i = 0; i < entry->files_count; i++)
-        generate_json_file(doc, files, entry->files[i]);
+    for (unsigned i = 0; i < entry->files_count; i++) {
+        yyjson_mut_val *yyjson_file = yyjson_mut_obj(doc);
+        dataset_file_t *file = entry->files[i];
 
-    yyjson_mut_obj_add_val(doc, root, "commit_files", files);
-}
+        yyjson_mut_obj_add_str(doc, yyjson_file, "status", file->status);
 
-static void generate_json_context_distances(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_context_file, dataset_context_file_t *dataset_context_file) {
-    yyjson_mut_val *context_distances = yyjson_mut_arr(doc);
+        yyjson_mut_obj_add_str(doc, yyjson_file, "path", file->path);
+        yyjson_mut_obj_add_str(doc, yyjson_file, "previous_path", file->previous_path);
 
-    for (unsigned i = 0; i < dataset_context_file->distances_count; i++) {
-        yyjson_mut_val *context_distance = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_str(doc, yyjson_file, "content", file->after);
+        yyjson_mut_obj_add_str(doc, yyjson_file, "previous_content", file->before);
 
-        yyjson_mut_obj_add_str(doc, context_distance, "path", dataset_context_file->distances[i]->path);
-        yyjson_mut_obj_add_uint(doc, context_distance, "distance", dataset_context_file->distances[i]->distance);
+        generate_json_functions(doc, yyjson_file, file);
 
-        yyjson_mut_arr_add_val(context_distances, context_distance);
+        yyjson_mut_arr_add_val(yyjson_files, yyjson_file);
     }
 
-    yyjson_mut_obj_add_val(doc, yyjson_context_file, "distances", context_distances);
+    yyjson_mut_obj_add_val(doc, root, "commit_files", yyjson_files);
 }
 
-static void generate_json_context_file(yyjson_mut_doc *doc, yyjson_mut_val *context_files, dataset_context_file_t *dataset_context_file) {
-    yyjson_mut_val *yyjson_context_file = yyjson_mut_obj(doc);
+static void generate_json_context_distances(yyjson_mut_doc *doc, yyjson_mut_val *yyjson_context_file, dataset_context_file_t *context_file) {
+    yyjson_mut_val *yyjson_context_distances = yyjson_mut_arr(doc);
 
-    yyjson_mut_obj_add_str(doc, yyjson_context_file, "path", dataset_context_file->path);
-    yyjson_mut_obj_add_str(doc, yyjson_context_file, "content", dataset_context_file->content);
+    for (unsigned i = 0; i < context_file->distances_count; i++) {
+        yyjson_mut_val *yyjson_context_distance = yyjson_mut_obj(doc);
+        dataset_context_distance_t *context_distance = context_file->distances[i];
 
-    generate_json_context_distances(doc, yyjson_context_file, dataset_context_file);
+        yyjson_mut_obj_add_str(doc, yyjson_context_distance, "path", context_distance->path);
+        yyjson_mut_obj_add_uint(doc, yyjson_context_distance, "distance", context_distance->distance);
 
-    yyjson_mut_arr_add_val(context_files, yyjson_context_file);
+        yyjson_mut_arr_add_val(yyjson_context_distances, yyjson_context_distance);
+    }
+
+    yyjson_mut_obj_add_val(doc, yyjson_context_file, "distances", yyjson_context_distances);
 }
 
 static void generate_json_context_files(yyjson_mut_doc *doc, yyjson_mut_val *root, dataset_entry_t *entry) {
-    yyjson_mut_val *context_files = yyjson_mut_arr(doc);
+    yyjson_mut_val *yyjson_context_files = yyjson_mut_arr(doc);
 
-    for (unsigned i = 0; i < entry->context_files_count; i++)
-        generate_json_context_file(doc, context_files, entry->context_files[i]);
+    for (unsigned i = 0; i < entry->context_files_count; i++) {
+        yyjson_mut_val *yyjson_context_file = yyjson_mut_obj(doc);
+        dataset_context_file_t *context_file = entry->context_files[i];
 
-    yyjson_mut_obj_add_val(doc, root, "context_files", context_files);
+        yyjson_mut_obj_add_str(doc, yyjson_context_file, "path", context_file->path);
+        yyjson_mut_obj_add_str(doc, yyjson_context_file, "content", context_file->content);
+
+        generate_json_context_distances(doc, yyjson_context_file, context_file);
+
+        yyjson_mut_arr_add_val(yyjson_context_files, yyjson_context_file);
+    }
+
+    yyjson_mut_obj_add_val(doc, root, "context_files", yyjson_context_files);
 }
 
-static char *generate_json(dataset_entry_t *entry, size_t *len) {
+static char *generate_json(dataset_entry_t *entry, size_t *size) {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     EXIT_IF(doc == NULL, "yyjson_mut_doc_new");
 
@@ -145,19 +146,28 @@ static char *generate_json(dataset_entry_t *entry, size_t *len) {
     generate_json_context_files(doc, root, entry);
 
     yyjson_write_err err = {0};
-    char *json = yyjson_mut_write_opts(doc, YYJSON_WRITE_PRETTY | YYJSON_WRITE_ALLOW_INVALID_UNICODE, NULL, len, &err);
+    char *json = yyjson_mut_write_opts(doc, YYJSON_WRITE_PRETTY | YYJSON_WRITE_ALLOW_INVALID_UNICODE, NULL, size, &err);
     EXIT_IF(json == NULL, "yyjson_mut_write: %s", err.msg);
 
     yyjson_mut_doc_free(doc);
     return json;
 }
 
-static void export_str(const char *str, size_t len, int fd) {
+static bool export_str(const char *str, size_t len, const char *output_path) {
+    int fd = open(output_path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+
+    if (fd == -1) {
+        EXIT_IF(errno != EEXIST, "open");
+        return false;
+    }
+
     FILE *f = fdopen(fd, "w");
     EXIT_IF(f == NULL, "fdopen");
 
     EXIT_IF(fwrite(str, 1, len, f) != len, "fwrite");
     EXIT_IF(fclose(f) == EOF, "fclose");
+
+    return true;
 }
 
 void parse_and_export_commit(void *global_context, void *local_context) {
@@ -179,24 +189,21 @@ void parse_and_export_commit(void *global_context, void *local_context) {
                 -1,
             "asprintf");
 
-    // parser_parse_commit(entry);
+    parser_parse_commit(entry);
 
-    int fd = open(output_path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+    size_t size = 0;
+    char *json = generate_json(entry, &size);
+
+    bool export_successful = export_str(json, size, output_path);
+
+    free(json);
     free(output_path);
+    dataset_entry_destroy(entry);
 
-    if (fd == -1 && errno == EEXIST) {
-        EXIT_IF(errno != EEXIST, "open");
-        dataset_entry_destroy(entry);
+    if (!export_successful) {
         history_update_line(history, history->parsing_section, line_number, "filename already exists", true);
         return;
     }
 
-    size_t len = 0;
-    char *json = generate_json(entry, &len);
-
-    export_str(json, len, fd);
-    free(json);
-
-    dataset_entry_destroy(entry);
     history_update_line(history, history->parsing_section, line_number, "complete", true);
 }

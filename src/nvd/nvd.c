@@ -117,7 +117,7 @@ void nvd_request(const config_t *config, jobs_queue_t *github_queue, history_t *
         if (window_start < config->cve_published_after)
             window_start = config->cve_published_after;
 
-        while (window_end >= window_start) {
+        while (window_end > window_start) {
 
             download_window(nvd_client, github_queue, history, line_number, window_start, window_end, config->cwe_ids[i]);
 
