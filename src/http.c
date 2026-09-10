@@ -1,12 +1,19 @@
 #include <curl/curl.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "http.h"
 #include "utils.h"
 
 #define HTTP_MAX_TIMEOUT 30
+
+#define NVD_MAX_DELAY 8
+#define GITHUB_TIME_BETWEEN_REQUESTS 1
+#define MAX_ERRORS 3
 
 #define CURL_OK(expr)                                                                                                                                          \
     do {                                                                                                                                                       \
@@ -88,4 +95,131 @@ CURLcode http_get(http_client_t *client, const char *url, http_response_t *respo
     EXIT_IF(fclose(stream) == EOF, "fclose");
 
     return err;
+}
+
+static long get_header_value(http_client_t *client, const char *name) {
+    struct curl_header *header = NULL;
+    CURLHcode err = curl_easy_header(client->curl, name, 0, CURLH_HEADER, -1, &header);
+
+    if (err == CURLHE_MISSING || err == CURLHE_NOHEADERS)
+        return -1;
+
+    EXIT_IF(err != CURLHE_OK, "curl_easy_header");
+    return strtol(header->value, NULL, 10);
+}
+
+char *nvd_download(http_client_t *client, const char *url, size_t *response_size) {
+    pthread_mutex_lock(&client->lock);
+    unsigned unexpected_errors_count = 0;
+
+    while (true) {
+        sleep(client->delay);
+        http_response_t response = {0};
+
+        long status = 0;
+        CURLcode err = http_get(client, url, &response, &status);
+
+        if (err != CURLE_OK) {
+            EXIT_IF(++unexpected_errors_count == MAX_ERRORS, curl_easy_strerror(err));
+            client->delay = 1;
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        if (status == 429) {
+            client->delay = client->delay == 0 ? 1 : client->delay * 2 > NVD_MAX_DELAY ? client->delay : client->delay * 2;
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        if (status < 200 || status >= 300) {
+            EXIT_IF(++unexpected_errors_count == MAX_ERRORS, "HTTP error %ld", status);
+            client->delay = 1;
+            http_client_reset(client);
+            free(response.data);
+            continue;
+        }
+
+        client->delay /= 2;
+        pthread_mutex_unlock(&client->lock);
+
+        *response_size = response.size;
+        return response.data;
+    }
+}
+
+char *github_download(http_client_t *client, const char *url, size_t *response_size) {
+    pthread_mutex_lock(&client->lock);
+    unsigned unexpected_errors_count = 0;
+
+    sleep(GITHUB_TIME_BETWEEN_REQUESTS);
+    while (true) {
+        http_response_t response = {0};
+        long status = 0;
+        CURLcode err = http_get(client, url, &response, &status);
+
+        if (err != CURLE_OK) {
+            free(response.data);
+            if (++unexpected_errors_count == MAX_ERRORS) {
+                pthread_mutex_unlock(&client->lock);
+                return NULL;
+            }
+
+            http_client_reset(client);
+            sleep(GITHUB_TIME_BETWEEN_REQUESTS);
+            continue;
+        }
+
+        if (status == 403) {
+            long remaining = get_header_value(client, "x-ratelimit-remaining");
+            long reset = get_header_value(client, "x-ratelimit-reset");
+
+            EXIT_IF(remaining != 0, "HTTP error %ld with %ld remaining requests", status, remaining);
+            EXIT_IF(reset < 0, "HTTP error %ld with missing x-ratelimit-reset", status);
+
+            time_t now = time(NULL);
+            EXIT_IF(reset < now, "HTTP error %ld with invalid x-ratelimit-reset", status);
+
+            free(response.data);
+            sleep((unsigned)(reset - now));
+            continue;
+        }
+
+        if (status == 404 || status == 409 || status == 422) {
+            pthread_mutex_unlock(&client->lock);
+            free(response.data);
+            return NULL;
+        }
+
+        if (status == 429) {
+            free(response.data);
+            sleep(60);
+            continue;
+        }
+
+        if (status == 500 || status == 503) {
+            free(response.data);
+            sleep(10);
+            continue;
+        }
+
+        if (status < 200 || status >= 300) {
+            free(response.data);
+            if (++unexpected_errors_count == MAX_ERRORS) {
+                pthread_mutex_unlock(&client->lock);
+                return NULL;
+            }
+
+            http_client_reset(client);
+            sleep(GITHUB_TIME_BETWEEN_REQUESTS);
+            continue;
+        }
+
+        pthread_mutex_unlock(&client->lock);
+
+        *response_size = response.size;
+        return response.data;
+    }
 }

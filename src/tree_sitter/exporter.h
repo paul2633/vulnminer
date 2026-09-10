@@ -1,10 +1,14 @@
 #ifndef EXPORTER_H
 #define EXPORTER_H
 
-#include <stdbool.h>
+#include "config.h"
+#include "history.h"
 
-#include "dataset.h"
+typedef struct {
+    config_t *config;
+    history_t *history;
+} exporter_global_context_t;
 
-bool exporter_export_commit(const char *export_folder_path, dataset_entry_t *entry);
+void parse_and_export_commit(void *global_context, void *local_context);
 
 #endif

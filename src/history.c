@@ -15,10 +15,8 @@ static history_line_t *line_new(const char *prefix, const char *suffix) {
     line->prefix = strdup(prefix);
     EXIT_IF(line->prefix == NULL, "strdup");
 
-    if (suffix != NULL) {
-        line->suffix = strdup(suffix);
-        EXIT_IF(line->suffix == NULL, "strdup");
-    }
+    line->suffix = strdup(suffix);
+    EXIT_IF(line->suffix == NULL, "strdup");
 
     return line;
 }

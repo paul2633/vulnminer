@@ -111,6 +111,14 @@ static void parse_config_file(config_t *config, const char *path) {
             config->include_c_files = strcmp(VALUE("include-c-files"), "yes") == 0;
         else if (MATCH("include-cpp-files"))
             config->include_cpp_files = strcmp(VALUE("include-cpp-files"), "yes") == 0;
+        else if (MATCH("context-depth"))
+            config->context_depth = atoi(VALUE("context-depth"));
+        else if (MATCH("max-files-commit"))
+            config->max_files_commit = atoi(VALUE("max-files-commit"));
+        else if (MATCH("max-files-context"))
+            config->max_files_context = atoi(VALUE("max-files-context"));
+        else if (MATCH("max-files-total"))
+            config->max_files_total = atoi(VALUE("max-files-total"));
     }
 
     EXIT_IF(fclose(f) == EOF, "fclose");
@@ -177,4 +185,9 @@ void display_config(const config_t *config) {
     printf(LOG_C "[INIT] include C++ files: %s" RESET_C "\n", config->include_cpp_files ? "yes" : "no");
     printf("\n");
     printf(LOG_C "[INIT] export folder path: %s" RESET_C "\n", config->export_folder_path);
+    printf("\n");
+    printf(LOG_C "[INIT] context depth: %u" RESET_C "\n", config->context_depth);
+    printf(LOG_C "[INIT] max files commit: %u" RESET_C "\n", config->max_files_commit);
+    printf(LOG_C "[INIT] max files context: %u" RESET_C "\n", config->max_files_context);
+    printf(LOG_C "[INIT] max files total: %u" RESET_C "\n", config->max_files_total);
 }

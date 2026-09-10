@@ -34,14 +34,14 @@ static char *nvd_parser_get_description(yyjson_val *cve) {
     size_t i, max;
 
     yyjson_arr_foreach(descriptions, i, max, description) {
-        yyjson_val *lang = yyjson_obj_get(description, "lang");
-        yyjson_val *value = yyjson_obj_get(description, "value");
+        const char *lang = yyjson_get_str(yyjson_obj_get(description, "lang"));
+        const char *value = yyjson_get_str(yyjson_obj_get(description, "value"));
 
-        if (lang == NULL || !yyjson_is_str(lang) || value == NULL || !yyjson_is_str(value))
+        if (lang == NULL || value == NULL)
             continue;
 
-        if (strcmp(yyjson_get_str(lang), "en") == 0)
-            return strdup(yyjson_get_str(value));
+        if (strcmp(lang, "en") == 0)
+            return strdup(value);
     }
 
     return NULL;
@@ -131,17 +131,15 @@ static void nvd_parser_parse_cve(jobs_queue_t *github_queue, yyjson_val *cve, un
     size_t i, max;
 
     yyjson_arr_foreach(refs, i, max, ref) {
-        yyjson_val *url = yyjson_obj_get(ref, "url");
-        if (url == NULL || !yyjson_is_str(url))
+        const char *url = yyjson_get_str(yyjson_obj_get(ref, "url"));
+        if (url == NULL)
             continue;
 
         if (!nvd_parser_check_is_patch(yyjson_obj_get(ref, "tags")))
             continue;
 
-        const char *url_str = yyjson_get_str(url);
-
-        char *repo_name = extract_repo_path(url_str);
-        char *commit_hash = extract_commit_hash(url_str);
+        char *repo_name = extract_repo_path(url);
+        char *commit_hash = extract_commit_hash(url);
 
         if (repo_name == NULL || commit_hash == NULL || check_is_duplicate(pushed_repos_infos, pushed_repos_count, repo_name, commit_hash)) {
             free(repo_name);

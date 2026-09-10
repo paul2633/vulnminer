@@ -21,6 +21,12 @@ typedef struct {
     bool include_cpp_files;
 
     char *export_folder_path;
+
+    unsigned context_depth;
+    unsigned max_files_commit;
+    unsigned max_files_context;
+    unsigned max_files_total;
+
 } config_t;
 
 config_t *config_new(int argc, char **argv);

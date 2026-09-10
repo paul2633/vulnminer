@@ -7,8 +7,10 @@
 #include "dataset.h"
 #include "yyjson.h"
 
-bool github_parser_parse_infos(dataset_entry_t *entry, yyjson_doc *doc);
+void github_parse_commit_infos(dataset_entry_t *entry, yyjson_doc *doc);
 
-bool github_parser_parse_files(const config_t *config, dataset_entry_t *entry, yyjson_doc *doc);
+bool github_parse_commit_files(const config_t *config, dataset_entry_t *entry, yyjson_doc *doc);
+
+void github_parse_context_files(dataset_entry_t *entry, yyjson_doc *doc, unsigned context_depth);
 
 #endif

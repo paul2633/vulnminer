@@ -6,8 +6,11 @@
 
 typedef struct {
     char *name;
-    uint32_t start_byte;
-    uint32_t end_byte;
+    char *content;
+
+    char *function_type;
+    char **parameters_types;
+    unsigned parameters_count;
 } dataset_function_t;
 
 typedef struct {
@@ -29,6 +32,12 @@ typedef struct {
 } dataset_file_t;
 
 typedef struct {
+    char *path;
+    char *content;
+    size_t size;
+} dataset_context_file_t;
+
+typedef struct {
     unsigned cwe_id;
 
     char *cve_id;
@@ -36,19 +45,24 @@ typedef struct {
     char *cve_description;
 
     char *repo_name;
-    char *commit_message;
     char *commit_hash;
     char *parent_commit_hash;
+    char *commit_message;
 
     dataset_file_t **files;
     unsigned files_count;
+
+    dataset_context_file_t **context_files;
+    unsigned context_files_count;
 } dataset_entry_t;
 
-void dataset_file_add_before_function(dataset_file_t *file, const char *name, uint32_t start_byte, uint32_t end_byte);
+void add_before_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end);
 
-void dataset_file_add_after_function(dataset_file_t *file, const char *name, uint32_t start_byte, uint32_t end_byte);
+void add_after_function(dataset_file_t *file, const char *function_name, uint32_t function_start, uint32_t function_end);
 
-dataset_file_t *dataset_file_new(const char *path, const char *previous_path, const char *status);
+void add_new_file(dataset_entry_t *entry, const char *path, const char *previous_path, const char *status);
+
+void add_new_context_file(dataset_entry_t *entry, const char *path);
 
 dataset_entry_t *dataset_entry_new(unsigned cwe_id, const char *cve_id, const char *repo_name, const char *commit_hash, const char *cve_description,
                                    const char *cve_published);

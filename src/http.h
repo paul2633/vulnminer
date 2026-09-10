@@ -31,4 +31,8 @@ void http_client_reset(http_client_t *client);
 
 CURLcode http_get(http_client_t *client, const char *url, http_response_t *response, long *status);
 
+char *nvd_download(http_client_t *client, const char *url, size_t *response_size);
+
+char *github_download(http_client_t *client, const char *url, size_t *response_size);
+
 #endif
