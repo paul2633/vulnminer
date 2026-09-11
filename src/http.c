@@ -177,6 +177,9 @@ char *github_download(http_client_t *client, const char *url, size_t *response_s
 
         CURLcode err = http_get(client, url, &response, &status);
 
+        CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HEADERFUNCTION, NULL));
+        CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HEADERDATA, NULL));
+
         if (err != CURLE_OK) {
             free(response.data);
             if (++unexpected_errors_count == MAX_ERRORS) {
