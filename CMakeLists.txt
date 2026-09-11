@@ -37,7 +37,13 @@ target_include_directories(tree_sitter SYSTEM PUBLIC
     third_party/tree-sitter-cpp/src
 )
 
-add_subdirectory(third_party/yyjson)
+add_library(yyjson STATIC
+    third_party/yyjson/src/yyjson.c
+)
+
+target_include_directories(yyjson SYSTEM PUBLIC
+    third_party/yyjson/src
+)
 
 target_compile_options(tree_sitter PRIVATE
     -w

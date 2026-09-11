@@ -3,6 +3,3 @@ build/
 
 # IDE
 .vscode/
-
-# Local temporary stuff
-tmp/
