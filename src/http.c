@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -97,17 +99,6 @@ CURLcode http_get(http_client_t *client, const char *url, http_response_t *respo
     return err;
 }
 
-static long get_header_value(http_client_t *client, const char *name) {
-    struct curl_header *header = NULL;
-    CURLHcode err = curl_easy_header(client->curl, name, 0, CURLH_HEADER, -1, &header);
-
-    if (err == CURLHE_MISSING || err == CURLHE_NOHEADERS)
-        return -1;
-
-    EXIT_IF(err != CURLHE_OK, "curl_easy_header");
-    return strtol(header->value, NULL, 10);
-}
-
 char *nvd_download(http_client_t *client, const char *url, size_t *response_size) {
     pthread_mutex_lock(&client->lock);
     unsigned unexpected_errors_count = 0;
@@ -150,6 +141,27 @@ char *nvd_download(http_client_t *client, const char *url, size_t *response_size
     }
 }
 
+typedef struct {
+    long remaining;
+    long reset;
+} github_headers_t;
+
+static size_t github_header_callback(char *buffer, size_t size, size_t nitems, void *userdata) {
+    github_headers_t *headers = userdata;
+    size_t total = size * nitems;
+
+    const char *remaining_header = "x-ratelimit-remaining:";
+    const char *reset_header = "x-ratelimit-reset:";
+
+    if (strncasecmp(buffer, remaining_header, strlen(remaining_header)) == 0) {
+        headers->remaining = strtol(buffer + strlen(remaining_header), NULL, 10);
+    } else if (strncasecmp(buffer, reset_header, strlen(reset_header)) == 0) {
+        headers->reset = strtol(buffer + strlen(reset_header), NULL, 10);
+    }
+
+    return total;
+}
+
 char *github_download(http_client_t *client, const char *url, size_t *response_size) {
     pthread_mutex_lock(&client->lock);
     unsigned unexpected_errors_count = 0;
@@ -158,6 +170,11 @@ char *github_download(http_client_t *client, const char *url, size_t *response_s
     while (true) {
         http_response_t response = {0};
         long status = 0;
+
+        github_headers_t headers = {-1, -1};
+        CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HEADERFUNCTION, github_header_callback));
+        CURL_OK(curl_easy_setopt(client->curl, CURLOPT_HEADERDATA, &headers));
+
         CURLcode err = http_get(client, url, &response, &status);
 
         if (err != CURLE_OK) {
@@ -173,8 +190,8 @@ char *github_download(http_client_t *client, const char *url, size_t *response_s
         }
 
         if (status == 403) {
-            long remaining = get_header_value(client, "x-ratelimit-remaining");
-            long reset = get_header_value(client, "x-ratelimit-reset");
+            long remaining = headers.remaining;
+            long reset = headers.reset;
 
             EXIT_IF(remaining != 0, "HTTP error %ld with %ld remaining requests", status, remaining);
             EXIT_IF(reset < 0, "HTTP error %ld with missing x-ratelimit-reset", status);
