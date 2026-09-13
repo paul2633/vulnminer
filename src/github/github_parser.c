@@ -98,6 +98,9 @@ bool github_parse_commit_files(const config_t *config, dataset_entry_t *entry, y
 }
 
 static unsigned context_distance(const char *path1, const char *path2) {
+    if (strcmp(path1, path2) == 0)
+        return 0;
+
     unsigned common_len = 0, distance = 0;
 
     while (path1[common_len] == path2[common_len] && path1[common_len] != '\0')
@@ -114,7 +117,7 @@ static unsigned context_distance(const char *path1, const char *path2) {
         if (path2[i] == '/')
             distance++;
 
-    return distance;
+    return distance + 1;
 }
 
 static bool is_already_in_commit(const dataset_entry_t *entry, const char *path) {
@@ -134,7 +137,7 @@ static void github_add_context_file(dataset_entry_t *entry, const char *path, un
 
         unsigned distance = context_distance(entry->files[i]->path, path);
 
-        if (distance < context_depth) {
+        if (distance <= context_depth) {
             if (context_file == NULL)
                 context_file = add_and_get_new_context_file(entry, path);
             add_new_context_distance(context_file, entry->files[i]->path, distance);
