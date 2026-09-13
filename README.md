@@ -283,7 +283,7 @@ For each candidate commit, VulnMiner retrieves the commit information from GitHu
 - commit message
 - changed file paths
 
-Commits containing files with unsupported extensions, or exceeding the configured file limit, are rejected before source-code parsing.
+Commits containing files with unsupported extensions, or exceeding the configured file limit, are rejected before downloading the content of the files.
 
 ### 3. Changed files
 
@@ -322,7 +322,7 @@ For example:
 
 When context extraction is enabled, VulnMiner retrieves additional files from the repository tree.
 
-If the context contains too many file paths, the dataset entry is discarded before downloading the actual content of the context files and before source-code parsing.
+If the context contains too many file paths, the dataset entry is discarded before downloading the actual content of the context files.
 
 Each context file contains the distance to the affected file(s), allowing the resulting dataset to retain structural information about the repository around the vulnerability-related change.
 
@@ -333,11 +333,15 @@ Example:
         "content": "...",
         "distances": [
             {
-                "path": "src/main.c",
+                "path": "file1.c",
+                "distance": 0
+            },
+            {
+                "path": "dir1/file2.c",
                 "distance": 1
             },
             {
-                "path": "src/parsing/parser.c",
+                "path": "dir1/dir2/file3.c",
                 "distance": 2
             }
         ]
@@ -363,8 +367,6 @@ Functions are matched between the before and after versions using their:
 
 - name
 - number of parameters
-
-The return type is not used for matching because it does not distinguish overloads in C++.
 
 This allows the parser to identify functions whose implementation changed while keeping the same name and number of parameters.
 
@@ -442,7 +444,7 @@ For example:
 
     CWE-476_CVE-2026-21498_iccDEV_bdfa3194.json
 
-Existing output files are not overwritten.
+Already existing output files names are not overwritten.
 
 ## Parallel processing
 
@@ -465,15 +467,15 @@ VulnMiner uses worker threads and job queues to separate the different processin
      ▼
     JSON files
 
-The master thread retrieves and prepares a CVE reference. Once a reference is accepted, it is submitted to the GitHub queue.
+This separation allows the NVD acquisition stage, the GitHub acquisition stage and the source-code parsing stage to be processed independently:
 
-A GitHub worker retrieves and prepares a commit. Once the commit is accepted, it is submitted to the parsing queue.
+1. The master thread retrieves and prepares a CVE reference. Once a reference is accepted, it is submitted to the GitHub queue.
+2. A GitHub worker retrieves and prepares a commit. Once the commit is accepted, it is submitted to the parsing queue.
+3. A parsing worker then performs Tree-sitter analysis and generates the JSON output.
 
-A parsing worker then performs Tree-sitter analysis and generates the JSON output.
+The architecture is intentionally suitable for adding different sources of vulnerabilities. For example, adding another vulnerability source would only require a module responsible for retrieving that source, after which it could submit the resulting commits to the existing GitHub processing queue.
 
-This separation allows the NVD acquisition stage, the GitHub acquisition stage and the source-code parsing stage to be processed independently. Also, the architecture is intentionally suitable for adding different sources of vulnerabilities. For example, adding another vulnerability source would only require a module responsible for retrieving and parsing that source, after which it could submit the resulting commits to the existing GitHub processing queue.
-
-For this version, there are only three threads in total, including the main thread: one for each of the three pipeline stages described above. Using several threads for the same download stage (NVD or GitHub) is not particularly useful, because the network remains by far the main bottleneck. Similarly, using several threads for the parsing stage does not necessarily improve the overall execution time, since a single parsing thread is generally able to parse and export a commit before the next commit is downloaded.
+For this version, there are only three threads used in total, including the main thread: one for each of the three pipeline stages described above. Using several threads for the same download stage (NVD or GitHub) is not particularly useful, because the network remains by far the main bottleneck. Similarly, using several threads for the Tree-sitter parsing stage does not necessarily improve the overall execution time, since a single parsing thread is generally able to parse and export a commit before the next commit is downloaded.
 
 ## Development
 
@@ -506,25 +508,21 @@ The available CMake targets should be preferred over manually reproducing the pr
 
 ## Known limitations
 
-VulnMiner is intended as a dataset extraction tool rather than a complete vulnerability detector.
-
 The current implementation has several known limitations.
 
 ### Function matching
 
 Function matching currently relies on the function name and parameter count.
 
-As a result, different C++ methods can have identical names and parameter counts. Such methods may therefore be matched incorrectly.
+As a result, different C functions or C++ methods with identical names and parameter numbers may be matched incorrectly.
 
-This can produce false positive matches.
+### Multiple parent commits
 
-### C++ operators
+Most commits have a single parent, but merge commits can have multiple parents.
 
-C++ operator functions are represented through the syntax exposed by Tree-sitter. The current function-name extraction does not provide a fully qualified C++ symbol representation, so overloaded operators and similarly named methods can be ambiguous.
+Since the dataset requires an unambiguous before/after pair, commits with multiple parents are currently discarded.
 
-### Merge commits
-
-Commits with multiple parents are discarded because constructing an unambiguous before/after pair is not currently supported.
+The unified diff returned by GitHub cannot necessarily be used to reconstruct the complete previous file because it only contains the changed sections and some surrounding context.
 
 ### GitHub availability
 
