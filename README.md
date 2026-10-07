@@ -33,7 +33,6 @@ The current implementation focuses on **C and C++ repositories** and produces on
 - [Development](#development)
 - [Known limitations](#known-limitations)
   - [Function matching](#function-matching)
-  - [C++ operators](#c-operators)
   - [Merge commits](#merge-commits)
   - [GitHub availability](#github-availability)
   - [Large repositories](#large-repositories)
