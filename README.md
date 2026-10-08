@@ -1,6 +1,6 @@
-# SVA VulnMiner
+# VulnMiner
 
-SVA VulnMiner is a C-based tool for building vulnerability datasets from publicly available vulnerability information and Git repositories.
+VulnMiner is a C-based tool for building vulnerability datasets from publicly available vulnerability information and Git repositories.
 
 The tool combines information from the **National Vulnerability Database (NVD)** and **GitHub** to identify vulnerability-related commits and extract structured information about the affected source code.
 
@@ -102,6 +102,18 @@ By default, the program looks for the generated dataset export folder at:
 A different export folder can be specified with the `-o` option:
 
     ./vulnminer -o /path/to/folder
+
+## Terminal display
+
+VulnMiner refreshes its terminal display during execution instead of appending
+each update as a new line. For this reason, the terminal window should be large
+enough to display all information shown by the program, and each displayed line
+should fit on a single line.
+
+If the terminal window is too small or a line is wrapped, the refreshed display
+may appear corrupted or misaligned. This only affects the visual appearance of
+the terminal output and has no effect on the execution or on the generated
+dataset.
 
 ## Configuration
 
